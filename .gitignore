@@ -1,0 +1,11 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/.vs
+/TemperatureSensorArduinoReader/bin
+/TemperatureSensorArduinoReader/obj
+/TemperatureSensorArduinoReader/appSettings.json
+/TemperatureSensorArduinoReader/rooms.json
+/TemperatureSensorArduinoReader/TemperatureSensorArduinoReader.csproj.user
+/TemperatureSensorArduinoReader/Properties/PublishProfiles/FolderProfile.pubxml.user
