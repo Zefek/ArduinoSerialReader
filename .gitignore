@@ -9,3 +9,6 @@
 /TemperatureSensorArduinoReader/rooms.json
 /TemperatureSensorArduinoReader/TemperatureSensorArduinoReader.csproj.user
 /TemperatureSensorArduinoReader/Properties/PublishProfiles/FolderProfile.pubxml.user
+TemperatureSensorArduinoReaderTests/bin/Debug/net8.0/appSettings.json
+/TemperatureSensorArduinoReaderTests/bin
+/TemperatureSensorArduinoReaderTests/obj

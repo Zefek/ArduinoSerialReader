@@ -6,13 +6,11 @@ using System.Threading.Tasks;
 
 namespace TemperatureSensorArduinoReader
 {
-    internal class Room
+    public class Room
     {
-        public int Id { get; set; }
-        public string Name { get; set; }
+        public string SensorName { get; set; }
 
-        public int? SensorId {  get; set; }
-        public int? SensorChannel {  get; set; }
-        public string TopicName { get; set; }
+        public string SensorNewName { get; set; }
+        public string Name { get; set; }
     }
 }
