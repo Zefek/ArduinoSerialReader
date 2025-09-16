@@ -26,6 +26,7 @@ internal class Worker : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
+        await sensorService.SendAllSensorsDiscovery();
         serialPort = new SerialPort(options.Value.COMPort, 9600);
         serialPort.DataReceived += Sp_DataReceived;
         serialPort.Open();

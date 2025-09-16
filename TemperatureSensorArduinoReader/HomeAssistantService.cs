@@ -10,12 +10,14 @@ public class HomeAssistantService : BackgroundService
     private readonly ClientWebSocket clientWebSocket = new ClientWebSocket();
     private readonly RoomRepository roomRepository;
     private readonly IOptions<TemperatureAppSettings> options;
+    private readonly RabbitService rabbitService;
     private int messageId = 2;
 
-    public HomeAssistantService(RoomRepository roomRepository, IOptions<TemperatureAppSettings> options)
+    public HomeAssistantService(RoomRepository roomRepository, IOptions<TemperatureAppSettings> options, RabbitService rabbitService)
     {
         this.roomRepository = roomRepository;
         this.options = options;
+        this.rabbitService = rabbitService;
     }
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -61,6 +63,7 @@ public class HomeAssistantService : BackgroundService
                             else
                             {
                                 roomRepository.UpdateRoomSensor(room.Name, sensorName);
+                                await rabbitService.Publish("", "homeassistant/sensor/" + sensorName + "_temperature/config");
                             }
                         }
                     }

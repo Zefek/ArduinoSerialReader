@@ -19,7 +19,31 @@ namespace TemperatureSensorArduinoReader
             this.roomRepository = roomRepository;
             this.rabbitService = rabbitService;
             this.logger = logger;
+            this.rabbitService.HomeAssistantOnline += RabbitService_HomeAssistantOnline;
         }
+
+        private async Task SendSensorDiscovery(string sensorName)
+        {
+            logger.LogInformation("Sensor {sensor} not assigned to any room, but ForcedTransmition is set, publishing anyway.", sensorName);
+            await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateTemperature(sensorName)), "homeassistant/sensor/" + sensorName + "_temperature/config");
+            await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateHumidity(sensorName)), "homeassistant/sensor/" + sensorName + "_humidity/config");
+            await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateBattery(sensorName)), "homeassistant/sensor/" + sensorName + "_battery/config");
+            await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateTrend(sensorName)), "homeassistant/sensor/" + sensorName + "_trend/config");
+        }
+
+        private async void RabbitService_HomeAssistantOnline(object? sender, EventArgs e)
+        {
+            await SendAllSensorsDiscovery();
+        }
+
+        public async Task SendAllSensorsDiscovery()
+        {
+            foreach (var room in roomRepository.GetRooms())
+            {
+                await SendSensorDiscovery(room.SensorName);
+            }
+        }
+
         public async Task PublishSensorData(Sensor sensor)
         {
             var rooms = roomRepository.GetRooms();
@@ -32,11 +56,7 @@ namespace TemperatureSensorArduinoReader
             }
             if (room == null && sensor.ForcedTransmition)
             {
-                logger.LogInformation("Sensor {sensor} not assigned to any room, but ForcedTransmition is set, publishing anyway.", sensor.Name);
-                await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateTemperature(sensor.Name)), "homeassistant/sensor/" + sensor.Name + "_temperature/config");
-                await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateHumidity(sensor.Name)), "homeassistant/sensor/" + sensor.Name + "_humidity/config");
-                await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateBattery(sensor.Name)), "homeassistant/sensor/" + sensor.Name + "_battery/config");
-                await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateTrend(sensor.Name)), "homeassistant/sensor/" + sensor.Name + "_trend/config");
+                await SendSensorDiscovery(topic);
             }
             var s = "";
             logger.LogInformation("Publishing data for sensor {sensor} to topic TX07KTXC/{topic}/state: {data}", sensor.Name, topic, BitConverter.ToString(sensor.Data).Replace("-", ""));
