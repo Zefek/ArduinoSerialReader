@@ -1,5 +1,7 @@
 ﻿using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Primitives;
 using Newtonsoft.Json;
 using System.Net.WebSockets;
 using System.Text;
@@ -11,17 +13,19 @@ public class HomeAssistantService : BackgroundService
     private readonly RoomRepository roomRepository;
     private readonly IOptions<TemperatureAppSettings> options;
     private readonly RabbitService rabbitService;
+    private readonly ILogger<HomeAssistantService> logger;
     private static readonly Random random = new();
     private int messageId = 2;
     private bool connected = false;
     private DateTime? lastConnectionTry = null;
     private TimeSpan connectionTimeout = TimeSpan.Zero;
 
-    public HomeAssistantService(RoomRepository roomRepository, IOptions<TemperatureAppSettings> options, RabbitService rabbitService)
+    public HomeAssistantService(RoomRepository roomRepository, IOptions<TemperatureAppSettings> options, RabbitService rabbitService, ILogger<HomeAssistantService> logger)
     {
         this.roomRepository = roomRepository;
         this.options = options;
         this.rabbitService = rabbitService;
+        this.logger = logger;
     }
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -80,6 +84,7 @@ public class HomeAssistantService : BackgroundService
         }
         try
         {
+            logger.LogInformation("Connecting to Home Assistant WebSocket...");
             clientWebSocket = new ClientWebSocket();
             clientWebSocket.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
             await clientWebSocket.ConnectAsync(new Uri(options.Value.HomeAssistantWebSocket), stoppingToken);
@@ -88,27 +93,32 @@ public class HomeAssistantService : BackgroundService
             var resultOk = await ReceiveMessage(stoppingToken);
             if (resultOk.type != "auth_ok")
             {
+                string message = JsonConvert.SerializeObject(resultOk);
+                logger.LogError("Error authenticating to Home Assistant WebSocket {message}", message);
                 lastConnectionTry = DateTime.Now;
                 connectionTimeout = TimeSpan.FromMilliseconds(Math.Min((connectionTimeout * 2 + TimeSpan.FromSeconds(random.Next(5))).TotalMilliseconds, TimeSpan.FromMinutes(5).TotalMilliseconds));
                 clientWebSocket.Dispose();
                 clientWebSocket = null;
                 return;
             }
+            logger.LogInformation("Authenticated to Home Assistant WebSocket");
             await SendMessage(new
             {
                 id = 1,
                 type = "subscribe_events",
                 event_type = "device_registry_updated"
             }, stoppingToken);
+            logger.LogInformation("Subscribed to device_registry_updated events");
             lastConnectionTry = null;
             connectionTimeout = TimeSpan.Zero;
             connected = true;
+            logger.LogInformation("Connected to Home Assistant WebSocket");
         }
-        catch
+        catch(Exception ex)
         {
+            logger.LogError(ex, "Error connecting to Home Assistant WebSocket");
             lastConnectionTry = DateTime.Now;
-            connectionTimeout = connectionTimeout * 2 + TimeSpan.FromSeconds(new Random().Next(5));
-            connectionTimeout = connectionTimeout < TimeSpan.FromMinutes(5) ? connectionTimeout : TimeSpan.FromMinutes(5);
+            connectionTimeout = TimeSpan.FromMilliseconds(Math.Min((connectionTimeout * 2 + TimeSpan.FromSeconds(random.Next(5))).TotalMilliseconds, TimeSpan.FromMinutes(5).TotalMilliseconds));
             clientWebSocket?.Dispose();
             clientWebSocket = null;
         }
@@ -116,14 +126,16 @@ public class HomeAssistantService : BackgroundService
 
     private async Task SendMessage(object value, CancellationToken cancellationToken)
     {
+        logger.LogDebug("Sending message to Home Assistant: {message}", System.Text.Json.JsonSerializer.Serialize(value));
         if (connected)
         {
             try
             {
                 await clientWebSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(value))), WebSocketMessageType.Text, true, cancellationToken);
             }
-            catch
+            catch(Exception ex)
             {
+                logger.LogError(ex, "Error sending message to Home Assistant");
                 clientWebSocket.Dispose();
                 clientWebSocket = null;
                 connected = false;
@@ -146,10 +158,12 @@ public class HomeAssistantService : BackgroundService
                     endOfMessage = result.EndOfMessage;
                     sb.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
                 } while (!endOfMessage);
+                logger.LogDebug("Message received from Home Assistant: {message}", sb.ToString());
                 return JsonConvert.DeserializeObject(sb.ToString());
             }
-            catch
+            catch(Exception ex)
             {
+                logger.LogError(ex, "Error receiving message from Home Assistant");
                 clientWebSocket.Dispose();
                 clientWebSocket = null;
                 connected = false;
