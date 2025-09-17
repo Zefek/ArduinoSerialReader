@@ -88,9 +88,9 @@ public class HomeAssistantService : BackgroundService
             clientWebSocket = new ClientWebSocket();
             clientWebSocket.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
             await clientWebSocket.ConnectAsync(new Uri(options.Value.HomeAssistantWebSocket), stoppingToken);
-            var resultAuthRequired = await ReceiveMessage(stoppingToken);
-            await SendMessage(new { type = "auth", access_token = options.Value.HomeAssistantToken }, stoppingToken);
-            var resultOk = await ReceiveMessage(stoppingToken);
+            var resultAuthRequired = await ReceiveMessage(stoppingToken, force: true);
+            await SendMessage(new { type = "auth", access_token = options.Value.HomeAssistantToken }, stoppingToken, force: true);
+            var resultOk = await ReceiveMessage(stoppingToken, force: true);
             if (resultOk.type != "auth_ok")
             {
                 string message = JsonConvert.SerializeObject(resultOk);
@@ -107,7 +107,7 @@ public class HomeAssistantService : BackgroundService
                 id = 1,
                 type = "subscribe_events",
                 event_type = "device_registry_updated"
-            }, stoppingToken);
+            }, stoppingToken, force: true);
             logger.LogInformation("Subscribed to device_registry_updated events");
             lastConnectionTry = null;
             connectionTimeout = TimeSpan.Zero;
@@ -124,10 +124,10 @@ public class HomeAssistantService : BackgroundService
         }
     }
 
-    private async Task SendMessage(object value, CancellationToken cancellationToken)
+    private async Task SendMessage(object value, CancellationToken cancellationToken, bool force = false)
     {
         logger.LogDebug("Sending message to Home Assistant: {message}", System.Text.Json.JsonSerializer.Serialize(value));
-        if (connected)
+        if (connected || force)
         {
             try
             {
@@ -143,9 +143,9 @@ public class HomeAssistantService : BackgroundService
         }
     }
 
-    private async Task<dynamic> ReceiveMessage(CancellationToken cancellationToken)
+    private async Task<dynamic> ReceiveMessage(CancellationToken cancellationToken, bool force = false)
     {
-        if (connected)
+        if (connected || force)
         {
             try
             {
