@@ -6,10 +6,12 @@ using System.Text;
 
 namespace TemperatureSensorArduinoReader
 {
-    internal class RabbitService : IDisposable
+    public class RabbitService : IDisposable
     {
         public readonly IMqttClient managedMqttClientPublisher;
         private readonly MqttClientOptions options;
+
+        public EventHandler HomeAssistantOnline { get; set; }
 
         public RabbitService(IOptions<TemperatureAppSettings> optionsTemp) 
         {
@@ -31,7 +33,8 @@ namespace TemperatureSensorArduinoReader
                     Server = optionsTemp.Value.MqttBroker,
                     Port = optionsTemp.Value.MqttPort,
                     TlsOptions = tlsOptions
-                }
+                },
+                KeepAlivePeriod = TimeSpan.FromSeconds(60)
             };
 
             options.Credentials = new MqttClientCredentials(optionsTemp.Value.MQTTUsername, Encoding.UTF8.GetBytes(optionsTemp.Value.MQTTPassword));
@@ -40,13 +43,25 @@ namespace TemperatureSensorArduinoReader
             options.KeepAlivePeriod = TimeSpan.FromSeconds(5);
 
             managedMqttClientPublisher = mqttFactory.CreateMqttClient();
+            managedMqttClientPublisher.ConnectedAsync += async e =>
+            {
+                await managedMqttClientPublisher.SubscribeAsync(new MqttTopicFilterBuilder().WithTopic("homeassistant/status").Build());
+            };
+            managedMqttClientPublisher.ApplicationMessageReceivedAsync += e =>
+            {
+                if (e.ApplicationMessage.Topic == "homeassistant/status" && Encoding.UTF8.GetString(e.ApplicationMessage.Payload) == "online")
+                {
+                    HomeAssistantOnline?.Invoke(this, EventArgs.Empty);
+                }
+                return Task.CompletedTask;
+            };
+            managedMqttClientPublisher.ConnectAsync(options).Wait();
+
         }
 
         public async Task Publish(string data, string topic)
         {
-            await managedMqttClientPublisher.ConnectAsync(options);
             await managedMqttClientPublisher.PublishStringAsync(topic, data);
-            await managedMqttClientPublisher.DisconnectAsync();
         }
 
         public void Dispose()

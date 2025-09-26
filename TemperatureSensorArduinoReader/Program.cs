@@ -22,6 +22,7 @@ try
             services.AddSingleton<RabbitService>();
             services.AddSingleton<SensorService>();
             services.AddHostedService<Worker>();
+            services.AddHostedService<HomeAssistantService>();
         })
         .ConfigureLogging(logging =>
         {
