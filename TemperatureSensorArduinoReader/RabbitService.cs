@@ -33,7 +33,8 @@ namespace TemperatureSensorArduinoReader
                     Server = optionsTemp.Value.MqttBroker,
                     Port = optionsTemp.Value.MqttPort,
                     TlsOptions = tlsOptions
-                }
+                },
+                KeepAlivePeriod = TimeSpan.FromSeconds(60)
             };
 
             options.Credentials = new MqttClientCredentials(optionsTemp.Value.MQTTUsername, Encoding.UTF8.GetBytes(optionsTemp.Value.MQTTPassword));
@@ -55,6 +56,7 @@ namespace TemperatureSensorArduinoReader
                 return Task.CompletedTask;
             };
             managedMqttClientPublisher.ConnectAsync(options).Wait();
+
         }
 
         public async Task Publish(string data, string topic)

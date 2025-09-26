@@ -69,7 +69,6 @@ public class HomeAssistantService : BackgroundService
                         }
                     }
                 }
-                //Console.WriteLine($"Message received: {message}");
             }
             // Keep the service running
             await Task.Delay(10, stoppingToken);
