@@ -15,6 +15,7 @@ internal class Worker : BackgroundService
     private readonly IOptions<TemperatureAppSettings> options;
     private readonly ILogger<Worker> logger;
     private readonly SensorService sensorService;
+    private CancellationToken cancellationToken;
 
     public Worker(IOptions<TemperatureAppSettings> options, ILogger<Worker> logger, SensorService sensorService)
     {
@@ -25,8 +26,9 @@ internal class Worker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        cancellationToken = stoppingToken;
         logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
-        await sensorService.SendAllSensorsDiscovery();
+        await sensorService.SendAllSensorsDiscovery(stoppingToken);
         serialPort = new SerialPort(options.Value.COMPort, 9600);
         serialPort.DataReceived += Sp_DataReceived;
         serialPort.Open();
@@ -43,10 +45,10 @@ internal class Worker : BackgroundService
         Thread.Sleep(1000);
         var buffer = new byte[serialPort.BytesToRead];
         serialPort.Read(buffer, 0, serialPort.BytesToRead);
-        await ProcessBuffer(buffer);
+        await ProcessBuffer(buffer, cancellationToken);
     }
 
-    async Task ProcessBuffer(byte[] buffer)
+    async Task ProcessBuffer(byte[] buffer, CancellationToken cancellationToken)
     {
         var data = new List<byte>();
         for (int i = 0; i < buffer.Length; i++)
@@ -68,7 +70,7 @@ internal class Worker : BackgroundService
                         }
                         logger.LogInformation("Data received: {data}", sb.ToString());
                         var sensor = new Sensor(new SensorData { Data = data.ToArray() });
-                        await sensorService.PublishSensorData(sensor);
+                        await sensorService.PublishSensorData(sensor, cancellationToken);
                     }
                     catch (Exception ex)
                     {

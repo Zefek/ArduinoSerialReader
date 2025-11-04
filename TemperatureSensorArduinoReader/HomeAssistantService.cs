@@ -64,7 +64,7 @@ public class HomeAssistantService : BackgroundService
                             else
                             {
                                 roomRepository.UpdateRoomSensor(room.Name, sensorName);
-                                await rabbitService.Publish("", "homeassistant/sensor/" + sensorName + "_temperature/config");
+                                await rabbitService.Publish("", "homeassistant/sensor/" + sensorName + "_temperature/config", stoppingToken);
                             }
                         }
                     }

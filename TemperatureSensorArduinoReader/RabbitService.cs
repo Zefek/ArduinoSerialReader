@@ -15,15 +15,18 @@ namespace TemperatureSensorArduinoReader
         public IMqttClient managedMqttClientPublisher;
         private readonly MqttClientOptions options;
         private bool connected = false;
-        private int attempt = 0;
         private static readonly Random random = new();
         private readonly ILogger<RabbitService> logger;
+        private readonly CancellationToken cancellationToken;
+        private TimeSpan mqttConnectionTimeout = TimeSpan.Zero;
+        private static SemaphoreSlim semaphore = new SemaphoreSlim(1, 1);
 
         public EventHandler HomeAssistantOnline { get; set; }
 
-        public RabbitService(IOptions<TemperatureAppSettings> optionsTemp, ILogger<RabbitService> logger)
+        public RabbitService(IOptions<TemperatureAppSettings> optionsTemp, ILogger<RabbitService> logger, CancellationToken cancellationToken)
         {
             this.logger = logger;
+            this.cancellationToken = cancellationToken;
             var tlsOptions = new MqttClientTlsOptions
             {
                 UseTls = true,
@@ -47,72 +50,89 @@ namespace TemperatureSensorArduinoReader
                 Credentials = new MqttClientCredentials(optionsTemp.Value.MQTTUsername, Encoding.UTF8.GetBytes(optionsTemp.Value.MQTTPassword))
             };
 
-            Connect();
+            Connect(cancellationToken).Wait();
 
         }
 
-        private void Connect()
+        private async Task Connect(CancellationToken cancellationToken)
         {
             logger.LogInformation("Connecting to MQTT broker...");
             var mqttFactory = new MqttFactory();
             managedMqttClientPublisher = mqttFactory.CreateMqttClient();
-            managedMqttClientPublisher.ConnectedAsync += async e =>
-            {
-                logger.LogInformation("Connected to MQTT broker.");
-                connected = true;
-                attempt = 0;
-                await managedMqttClientPublisher.SubscribeAsync(new MqttTopicFilterBuilder().WithTopic("homeassistant/status").Build());
-            };
-            managedMqttClientPublisher.ApplicationMessageReceivedAsync += e =>
-            {
-                logger.LogInformation("Received MQTT message on topic {topic}", e.ApplicationMessage.Topic);
-                if (e.ApplicationMessage.Topic == "homeassistant/status" && Encoding.UTF8.GetString(e.ApplicationMessage.Payload) == "online")
-                {
-                    HomeAssistantOnline?.Invoke(this, EventArgs.Empty);
-                }
-                return Task.CompletedTask;
-            };
-            managedMqttClientPublisher.DisconnectedAsync += async e =>
-            {
-                connected = false;
-                logger.LogWarning("Disconnected from MQTT broker.");
-                while (!connected)
-                {
-                    attempt++;
-                    int delay = baseDelayMs * (int)Math.Pow(2, attempt);
-                    delay = Math.Min(delay, maxDelayMs);
-                    int jitter = random.Next(0, delay / 2);
-                    await Task.Delay(delay + jitter);
-                    try
-                    {
-                        logger.LogInformation("Reconnecting to MQTT broker, attempt {attempt}...", attempt);
-                        await managedMqttClientPublisher.ConnectAsync(options);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex, "Error reconnecting to MQTT broker.");
-                    }
-                }
-            };
+            managedMqttClientPublisher.ConnectedAsync += Connected;
+            managedMqttClientPublisher.ApplicationMessageReceivedAsync += MessageReceived;
+            managedMqttClientPublisher.DisconnectedAsync += Disconnected;
+            await semaphore.WaitAsync(cancellationToken);
             try
             {
-                managedMqttClientPublisher.ConnectAsync(options).Wait();
+                if (!managedMqttClientPublisher.IsConnected)
+                {
+                    await managedMqttClientPublisher.ConnectAsync(options, cancellationToken);
+                }
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Error connecting to MQTT broker.");
             }
+            finally
+            {
+                semaphore.Release();
+            }
         }
 
-        public async Task Publish(string data, string topic)
+        private async Task Connected(MqttClientConnectedEventArgs e)
+        {
+            logger.LogInformation("Connected to MQTT broker.");
+            connected = true;
+            mqttConnectionTimeout = TimeSpan.Zero;
+            await managedMqttClientPublisher.SubscribeAsync(new MqttTopicFilterBuilder().WithTopic("homeassistant/status").Build(), cancellationToken);
+        }
+
+        private async Task Disconnected(MqttClientDisconnectedEventArgs e)
+        {
+            await semaphore.WaitAsync(cancellationToken);
+            connected = false;
+            logger.LogWarning("Disconnected from MQTT broker.");
+            while (!connected)
+            {
+                if(cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                mqttConnectionTimeout = TimeSpan.FromMilliseconds(Math.Min(mqttConnectionTimeout.TotalMilliseconds * 2 + random.Next(0, 5000), 300000));
+                await Task.Delay((int)mqttConnectionTimeout.TotalMilliseconds, cancellationToken);
+                try
+                {
+                    logger.LogInformation("Reconnecting to MQTT broker...");
+                    await managedMqttClientPublisher.ConnectAsync(options, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error reconnecting to MQTT broker.");
+                }
+            }
+            semaphore.Release();
+        }
+
+        private Task MessageReceived(MqttApplicationMessageReceivedEventArgs e)
+        {
+            logger.LogInformation("Received MQTT message on topic {topic}", e.ApplicationMessage.Topic);
+            if (e.ApplicationMessage.Topic == "homeassistant/status" && Encoding.UTF8.GetString(e.ApplicationMessage.Payload) == "online")
+            {
+                HomeAssistantOnline?.Invoke(this, EventArgs.Empty);
+            }
+            return Task.CompletedTask;
+        }
+
+        public async Task Publish(string data, string topic, CancellationToken cancellationToken)
         {
             if (!connected)
             {
-                Connect();
+                await Connect(cancellationToken);
             }
             try
             {
-                await managedMqttClientPublisher.PublishStringAsync(topic, data);
+                await managedMqttClientPublisher.PublishStringAsync(topic, data, cancellationToken: cancellationToken);
             }
             catch (Exception ex)
             {
@@ -123,7 +143,7 @@ namespace TemperatureSensorArduinoReader
 
         public void Dispose()
         {
-            managedMqttClientPublisher?.DisconnectAsync().Wait();
+            managedMqttClientPublisher?.DisconnectAsync(cancellationToken:cancellationToken).Wait();
             managedMqttClientPublisher?.Dispose();
             managedMqttClientPublisher = null;
         }
