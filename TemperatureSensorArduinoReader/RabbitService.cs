@@ -18,10 +18,9 @@ namespace TemperatureSensorArduinoReader
         private static readonly Random random = new();
         private readonly ILogger<RabbitService> logger;
         private TimeSpan mqttConnectionTimeout = TimeSpan.Zero;
-        private static SemaphoreSlim semaphore = new SemaphoreSlim(1, 1);
+        private SemaphoreSlim semaphore = new SemaphoreSlim(1, 1);
 
         public EventHandler HomeAssistantOnline { get; set; }
-        public int HostedLifecycleService_StopAsyncEvent { get; }
 
         public RabbitService(IOptions<TemperatureAppSettings> optionsTemp, ILogger<RabbitService> logger, IHostApplicationLifetime hostApplicationLifetime)
         {
@@ -150,6 +149,8 @@ namespace TemperatureSensorArduinoReader
             managedMqttClientPublisher?.DisconnectAsync(cancellationToken:cancellationTokenSource.Token).Wait();
             managedMqttClientPublisher?.Dispose();
             managedMqttClientPublisher = null;
+            cancellationTokenSource.Dispose();
+            semaphore.Dispose();
         }
     }
 }
