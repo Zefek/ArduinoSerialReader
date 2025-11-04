@@ -27,6 +27,7 @@ try
         .ConfigureLogging(logging =>
         {
             logging.ClearProviders();
+            logging.AddConsole();
             logging.AddEventLog(s =>
             {
                 s.LogName = "Application";
