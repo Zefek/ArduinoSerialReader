@@ -14,7 +14,6 @@ namespace TemperatureSensorArduinoReader
         private CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
         private IMqttClient managedMqttClientPublisher;
         private readonly MqttClientOptions options;
-        private bool connected = false;
         private static readonly Random random = new();
         private readonly ILogger<RabbitService> logger;
         private TimeSpan mqttConnectionTimeout = TimeSpan.Zero;
@@ -86,7 +85,6 @@ namespace TemperatureSensorArduinoReader
         private async Task Connected(MqttClientConnectedEventArgs e)
         {
             logger.LogInformation("Connected to MQTT broker.");
-            connected = true;
             mqttConnectionTimeout = TimeSpan.Zero;
             await managedMqttClientPublisher.SubscribeAsync(new MqttTopicFilterBuilder().WithTopic("homeassistant/status").Build(), cancellationTokenSource.Token);
         }
@@ -94,9 +92,8 @@ namespace TemperatureSensorArduinoReader
         private async Task Disconnected(MqttClientDisconnectedEventArgs e)
         {
             await semaphore.WaitAsync(cancellationTokenSource.Token);
-            connected = false;
             logger.LogWarning("Disconnected from MQTT broker.");
-            while (!connected)
+            while (!managedMqttClientPublisher.IsConnected)
             {
                 if(cancellationTokenSource.IsCancellationRequested)
                 {
@@ -129,7 +126,7 @@ namespace TemperatureSensorArduinoReader
 
         public async Task Publish(string data, string topic, CancellationToken cancellationToken)
         {
-            if (!connected)
+            if (!managedMqttClientPublisher.IsConnected)
             {
                 await Connect(cancellationToken);
             }

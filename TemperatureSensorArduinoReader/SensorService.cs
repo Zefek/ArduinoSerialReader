@@ -29,8 +29,6 @@ namespace TemperatureSensorArduinoReader
             await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateHumidity(sensorName)), "homeassistant/sensor/" + sensorName + "_humidity/config", cancellationToken);
             await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateBattery(sensorName)), "homeassistant/sensor/" + sensorName + "_battery/config", cancellationToken);
             await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateTrend(sensorName)), "homeassistant/sensor/" + sensorName + "_trend/config", cancellationToken);
-            await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateWindowState(sensorName)), "homeassistant/binary_sensor/" + sensorName + "_window/config", cancellationToken);
-
         }
 
         private async void RabbitService_HomeAssistantOnline(object? sender, EventArgs e)
