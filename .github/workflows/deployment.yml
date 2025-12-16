@@ -7,22 +7,22 @@ jobs:
   build:
     runs-on: [self-hosted, Home]
     environment: Home
-
-    - name: Setup .NET
+    steps:
+      - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-            dotnet-version: '8.0.x'
+          dotnet-version: '8.0.x'
     
-    - name: Restore
+      - name: Restore
         run: dotnet restore
 
-    - name: Build
+      - name: Build
         run: dotnet build -c Release --no-restore
 
-    - name: Publish
+      - name: Publish
         run: dotnet publish -c Release --no-build --self-contained true -r win-x64 -o ./publish
     
-    - name: Copy appsettings
+      - name: Copy appsettings
         shell: powershell
         run: |
             $secret = "${{ secrets.APPSETTINGS_JSON }}"
