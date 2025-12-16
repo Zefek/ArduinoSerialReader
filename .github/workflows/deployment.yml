@@ -1,0 +1,33 @@
+name: Deploy ArduinoSerialReader on Environment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: [self-hosted, Home]
+    environment: Home
+    steps:
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+    
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build -c Release --no-restore
+
+      - name: Publish
+        run: dotnet publish -c Release --no-build --self-contained true -r win-x64 -o ./publish
+    
+      - name: Copy appsettings
+        shell: powershell
+        run: |
+            $secret = "${{ secrets.APPSETTINGS_JSON }}"
+            $path = "publish\appsettings.json"
+            New-Item -ItemType Directory -Force -Path (Split-Path $path) | Out-Null
+            Set-Content -Path $path -Value $secret -Encoding UTF8
+
+    
