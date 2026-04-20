@@ -15,11 +15,24 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 8.0.x
+    
     - name: Restore dependencies
       run: dotnet restore
+    
     - name: Build
       run: dotnet build --no-restore
+
+    - name: Publish aplikace
+      run: dotnet publish --configuration Release --no-build --output ./publish_output
+
+    - name: Nahrání do Artifactů
+      uses: actions/upload-artifact@v4
+      with:
+        name: ArduinoSerialReader # Název balíčku, který uvidíš v GitHubu
+        path: ./publish_output
+        if-no-files-found: error
