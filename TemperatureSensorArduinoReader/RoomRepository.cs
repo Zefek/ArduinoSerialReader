@@ -1,34 +1,33 @@
-﻿using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
 namespace TemperatureSensorArduinoReader
 {
     public class RoomRepository
     {
-        public List<Room>GetRooms() 
+        private readonly AppDbContext dbContext;
+
+        public RoomRepository(AppDbContext dbContext)
         {
-            return JsonConvert.DeserializeObject<List<Room>>(File.ReadAllText("rooms.json"));
+            this.dbContext = dbContext;
+        }
+
+        public List<Room> GetRooms()
+        {
+            return dbContext.Rooms.ToList();
         }
 
         public void AddRoom(string roomName, string sensorName)
         {
-            var rooms = JsonConvert.DeserializeObject<List<Room>>(File.ReadAllText("rooms.json"));
-            rooms.Add(new Room { Name = roomName, SensorName = sensorName });
-            File.WriteAllText("rooms.json", JsonConvert.SerializeObject(rooms));
+            dbContext.Rooms.Add(new Room { Name = roomName, SensorName = sensorName });
+            dbContext.SaveChanges();
         }
 
         public void UpdateRoomSensor(string roomName, string sensorName)
         {
-            var rooms = JsonConvert.DeserializeObject<List<Room>>(File.ReadAllText("rooms.json"));
-            var room = rooms.FirstOrDefault(k => k.Name == roomName);
-            rooms.Remove(room);
-            room.SensorNewName = sensorName;
-            rooms.Add(room);
-            File.WriteAllText("rooms.json", JsonConvert.SerializeObject(rooms));
+            var room = dbContext.Rooms.FirstOrDefault(k => k.Name == roomName);
+            if (room != null)
+            {
+                room.SensorNewName = sensorName;
+                dbContext.SaveChanges();
+            }
         }
     }
 }

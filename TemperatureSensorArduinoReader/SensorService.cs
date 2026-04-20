@@ -27,8 +27,13 @@ namespace TemperatureSensorArduinoReader
             logger.LogInformation("Sensor {sensor} not assigned to any room, but ForcedTransmition is set, publishing anyway.", sensorName);
             await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateTemperature(sensorName)), "homeassistant/sensor/" + sensorName + "_temperature/config", cancellationToken);
             await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateHumidity(sensorName)), "homeassistant/sensor/" + sensorName + "_humidity/config", cancellationToken);
-            await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateBattery(sensorName)), "homeassistant/sensor/" + sensorName + "_battery/config", cancellationToken);
+            await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateBattery(sensorName)), "homeassistant/binary_sensor/" + sensorName + "_battery/config", cancellationToken);
             await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateTrend(sensorName)), "homeassistant/sensor/" + sensorName + "_trend/config", cancellationToken);
+            await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateDewPoint(sensorName)), "homeassistant/sensor/" + sensorName + "_dew_point/config", cancellationToken);
+            await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateAbsoluteHumidity(sensorName)), "homeassistant/sensor/" + sensorName + "_absolute_humidity/config", cancellationToken);
+            await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateTemperatureTrend(sensorName)), "homeassistant/sensor/" + sensorName + "_temperature_trend/config", cancellationToken);
+            await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateHumidityTrend(sensorName)), "homeassistant/sensor/" + sensorName + "_humidity_trend/config", cancellationToken);
+            await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateWindowOpen(sensorName)), "homeassistant/binary_sensor/" + sensorName + "_window_open/config", cancellationToken);
         }
 
         private async void RabbitService_HomeAssistantOnline(object? sender, EventArgs e)
@@ -58,13 +63,21 @@ namespace TemperatureSensorArduinoReader
             {
                 await SendSensorDiscovery(topic, cancellationToken);
             }
-            var s = "";
-            logger.LogInformation("Publishing data for sensor {sensor} to topic TX07KTXC/{topic}/state: {data}", sensor.Name, topic, BitConverter.ToString(sensor.Data).Replace("-", ""));
-            foreach (var d in sensor.Data)
+            var body = JsonConvert.SerializeObject(new
             {
-                s += d.ToString("X2");
-            }
-            await rabbitService.Publish(s, "TX07KTXC/" + topic+"/state", cancellationToken);
+                temperature = Math.Round(sensor.Temperature, 1),
+                humidity = sensor.Humidity,
+                battery = sensor.BatteryLow? "ON":"OFF",
+                trend = sensor.TemperatureUp? "↗" : sensor.TemperatureDown? "↘" : "→",
+                dewPoint = Math.Round(sensor.DewPoint, 1),
+                absoluteHumidity = Math.Round(sensor.AbsoluteHumidity, 1),
+                temperatureTrend = Math.Round(sensor.TemperatureTrend, 1),
+                humidityTrend = Math.Round(sensor.HumidityTrend, 1),
+                windowOpen = sensor.WindowOpen? "ON":"OFF"
+            });
+            
+            logger.LogInformation("Publishing data for sensor {sensor} to topic TX07KTXC/{topic}/state: {data}", sensor.Name, topic, body);
+            await rabbitService.Publish(body, "TX07KTXC/" + topic+"/state", cancellationToken);
         }
     }
 }
