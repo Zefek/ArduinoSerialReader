@@ -1,5 +1,4 @@
-﻿// See https://aka.ms/new-console-template for more information
-public class TemperatureAppSettings
+﻿public class TemperatureAppSettings
 {
     public string MqttBroker { get; set; }
     public int MqttPort { get; set; }
@@ -8,4 +7,6 @@ public class TemperatureAppSettings
     public string COMPort { get; set; }
     public string HomeAssistantWebSocket { get; set; }
     public string HomeAssistantToken { get; set; }
+    public string ConnectionString { get; set; }
+    public string LokiUrl { get; set; }
 }

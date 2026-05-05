@@ -15,13 +15,15 @@ internal class Worker : BackgroundService
     private readonly IOptions<TemperatureAppSettings> options;
     private readonly ILogger<Worker> logger;
     private readonly SensorService sensorService;
+    private readonly SensorRepository sensorRepository;
     private CancellationToken cancellationToken;
 
-    public Worker(IOptions<TemperatureAppSettings> options, ILogger<Worker> logger, SensorService sensorService)
+    public Worker(IOptions<TemperatureAppSettings> options, ILogger<Worker> logger, SensorService sensorService, SensorRepository sensorRepository)
     {
         this.options=options;
         this.logger=logger;
         this.sensorService=sensorService;
+        this.sensorRepository = sensorRepository;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -35,8 +37,10 @@ internal class Worker : BackgroundService
         while (!stoppingToken.IsCancellationRequested)
         {
             // Keep the service running
-            await Task.Delay(1000, stoppingToken); 
+            await Task.Delay(1000, stoppingToken);
         }
+        /*await ProcessBuffer(new byte[] {0x83, 0x60, 0x64, 0xA5, 0x73, 13, 10
+        }, stoppingToken);*/
     }
 
     private async void Sp_DataReceived(object sender, SerialDataReceivedEventArgs e)
@@ -70,7 +74,21 @@ internal class Worker : BackgroundService
                         }
                         logger.LogInformation("Data received: {data}", sb.ToString());
                         var sensor = new Sensor(new SensorData { Data = data.ToArray() });
-                        await sensorService.PublishSensorData(sensor, cancellationToken);
+                        var existingSensor = sensorRepository.GetSensor(sensor.Id, sensor.Channel);
+                        if (existingSensor == null)
+                        {
+                            sensorRepository.Add(sensor);
+                            logger.LogInformation("New sensor added: {sensor}", sensor.Name);
+                            existingSensor = sensor;
+                        }
+                        else
+                        {
+                            existingSensor.Update(new SensorData { Data = data.ToArray() });
+                            logger.LogInformation("Sensor updated: {sensor}", sensor.Name);
+                        }
+                        sensorRepository.SaveState(existingSensor);
+                        sensorRepository.SaveReading(existingSensor);
+                        await sensorService.PublishSensorData(existingSensor, cancellationToken);
                     }
                     catch (Exception ex)
                     {

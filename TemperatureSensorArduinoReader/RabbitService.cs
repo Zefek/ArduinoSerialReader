@@ -124,7 +124,7 @@ namespace TemperatureSensorArduinoReader
             return Task.CompletedTask;
         }
 
-        public async Task Publish(string data, string topic, CancellationToken cancellationToken)
+        public async Task Publish(object data, string topic, CancellationToken cancellationToken)
         {
             if (!managedMqttClientPublisher.IsConnected)
             {
@@ -132,7 +132,7 @@ namespace TemperatureSensorArduinoReader
             }
             try
             {
-                await managedMqttClientPublisher.PublishStringAsync(topic, data, cancellationToken: cancellationToken);
+                await managedMqttClientPublisher.PublishStringAsync(topic, data.ToString(), cancellationToken: cancellationToken);
             }
             catch (Exception ex)
             {
