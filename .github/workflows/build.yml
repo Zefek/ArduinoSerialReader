@@ -11,11 +11,10 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
     - uses: actions/checkout@v4
-    
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
@@ -25,7 +24,7 @@ jobs:
       run: dotnet restore
     
     - name: Build
-      run: dotnet build --no-restore  --configuration Release
+      run: dotnet build --no-restore --configuration Release
 
     - name: Publish aplikace
       run: dotnet publish --configuration Release --no-build --output ./publish_output
@@ -33,6 +32,6 @@ jobs:
     - name: Nahrání do Artifactů
       uses: actions/upload-artifact@v4
       with:
-        name: ArduinoSerialReader # Název balíčku, který uvidíš v GitHubu
+        name: Odecty
         path: ./publish_output
         if-no-files-found: error
