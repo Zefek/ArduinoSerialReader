@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
@@ -14,22 +15,23 @@ internal class Worker : BackgroundService
     private SerialPort serialPort;
     private readonly IOptions<TemperatureAppSettings> options;
     private readonly ILogger<Worker> logger;
-    private readonly SensorService sensorService;
-    private readonly SensorRepository sensorRepository;
+    private readonly IServiceProvider serviceProvider;
     private CancellationToken cancellationToken;
 
-    public Worker(IOptions<TemperatureAppSettings> options, ILogger<Worker> logger, SensorService sensorService, SensorRepository sensorRepository)
+    public Worker(IOptions<TemperatureAppSettings> options, ILogger<Worker> logger, IServiceProvider serviceProvider)
     {
-        this.options=options;
-        this.logger=logger;
-        this.sensorService=sensorService;
-        this.sensorRepository = sensorRepository;
+        this.options = options;
+        this.logger = logger;
+        this.serviceProvider = serviceProvider;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         cancellationToken = stoppingToken;
         logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
+
+        using var scope = serviceProvider.CreateScope();
+        var sensorService = scope.ServiceProvider.GetService<SensorService>();
         await sensorService.SendAllSensorsDiscovery(stoppingToken);
         serialPort = new SerialPort(options.Value.COMPort, 9600);
         serialPort.DataReceived += Sp_DataReceived;
@@ -39,8 +41,6 @@ internal class Worker : BackgroundService
             // Keep the service running
             await Task.Delay(1000, stoppingToken);
         }
-        /*await ProcessBuffer(new byte[] {0x83, 0x60, 0x64, 0xA5, 0x73, 13, 10
-        }, stoppingToken);*/
     }
 
     private async void Sp_DataReceived(object sender, SerialDataReceivedEventArgs e)
@@ -57,7 +57,7 @@ internal class Worker : BackgroundService
         var data = new List<byte>();
         for (int i = 0; i < buffer.Length; i++)
         {
-            if (buffer[i] == 13 && buffer[i+1] == 10)
+            if (buffer[i] == 13 && buffer[i + 1] == 10)
             {
                 if (data.Count != 5)
                 {
@@ -65,35 +65,15 @@ internal class Worker : BackgroundService
                 }
                 else
                 {
-                    try
+                    StringBuilder sb = new StringBuilder();
+                    foreach (var d in data)
                     {
-                        StringBuilder sb = new StringBuilder();
-                        foreach (var d in data)
-                        {
-                            sb.Append(string.Format("{0:X2}", d));
-                        }
-                        logger.LogInformation("Data received: {data}", sb.ToString());
-                        var sensor = new Sensor(new SensorData { Data = data.ToArray() });
-                        var existingSensor = sensorRepository.GetSensor(sensor.Id, sensor.Channel);
-                        if (existingSensor == null)
-                        {
-                            sensorRepository.Add(sensor);
-                            logger.LogInformation("New sensor added: {sensor}", sensor.Name);
-                            existingSensor = sensor;
-                        }
-                        else
-                        {
-                            existingSensor.Update(new SensorData { Data = data.ToArray() });
-                            logger.LogInformation("Sensor updated: {sensor}", sensor.Name);
-                        }
-                        sensorRepository.SaveState(existingSensor);
-                        sensorRepository.SaveReading(existingSensor);
-                        await sensorService.PublishSensorData(existingSensor, cancellationToken);
+                        sb.Append(string.Format("{0:X2}", d));
                     }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex, "Error processing sensor data: {message}", ex.Message);
-                    }
+                    logger.LogInformation("Data received: {data}", sb.ToString());
+                    using var scope = serviceProvider.CreateScope();
+                    var sensorPipeline = scope.ServiceProvider.GetService<SensorPipeline>();
+                    await sensorPipeline.Process(new SensorData { Data = data.ToArray() }, cancellationToken);
                 }
                 data.Clear();
             }

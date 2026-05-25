@@ -6,6 +6,7 @@ using MQTTnet.Client;
 using MQTTnet.Formatter;
 using System;
 using System.Text;
+using TemperatureSensorArduinoReader.TopicStrategies;
 
 namespace TemperatureSensorArduinoReader
 {
@@ -16,14 +17,14 @@ namespace TemperatureSensorArduinoReader
         private readonly MqttClientOptions options;
         private static readonly Random random = new();
         private readonly ILogger<RabbitService> logger;
+        private readonly TopicDispatcher topicDispatcher;
         private TimeSpan mqttConnectionTimeout = TimeSpan.Zero;
         private SemaphoreSlim semaphore = new SemaphoreSlim(1, 1);
 
-        public EventHandler HomeAssistantOnline { get; set; }
-
-        public RabbitService(IOptions<TemperatureAppSettings> optionsTemp, ILogger<RabbitService> logger, IHostApplicationLifetime hostApplicationLifetime)
+        public RabbitService(IOptions<TemperatureAppSettings> optionsTemp, ILogger<RabbitService> logger, IHostApplicationLifetime hostApplicationLifetime, TopicDispatcher topicDispatcher)
         {
             this.logger = logger;
+            this.topicDispatcher = topicDispatcher;
             hostApplicationLifetime.ApplicationStopping.Register(Stop);
             var tlsOptions = new MqttClientTlsOptions
             {
@@ -86,7 +87,8 @@ namespace TemperatureSensorArduinoReader
         {
             logger.LogInformation("Connected to MQTT broker.");
             mqttConnectionTimeout = TimeSpan.Zero;
-            await managedMqttClientPublisher.SubscribeAsync(new MqttTopicFilterBuilder().WithTopic("homeassistant/status").Build(), cancellationTokenSource.Token);
+            await managedMqttClientPublisher.SubscribeAsync(new MqttTopicFilterBuilder().WithTopic(MqttTopics.HomeAssistantStatus).Build(), cancellationTokenSource.Token);
+            await managedMqttClientPublisher.SubscribeAsync(new MqttTopicFilterBuilder().WithTopic(MqttTopics.HeaterOutTemp).Build(), cancellationTokenSource.Token);
         }
 
         private async Task Disconnected(MqttClientDisconnectedEventArgs e)
@@ -114,14 +116,10 @@ namespace TemperatureSensorArduinoReader
             semaphore.Release();
         }
 
-        private Task MessageReceived(MqttApplicationMessageReceivedEventArgs e)
+        private async Task MessageReceived(MqttApplicationMessageReceivedEventArgs e)
         {
             logger.LogInformation("Received MQTT message on topic {topic}", e.ApplicationMessage.Topic);
-            if (e.ApplicationMessage.Topic == "homeassistant/status" && Encoding.UTF8.GetString(e.ApplicationMessage.Payload) == "online")
-            {
-                HomeAssistantOnline?.Invoke(this, EventArgs.Empty);
-            }
-            return Task.CompletedTask;
+            await topicDispatcher.Dispatch(e.ApplicationMessage.Topic, e.ApplicationMessage.Payload, cancellationTokenSource.Token);
         }
 
         public async Task Publish(object data, string topic, CancellationToken cancellationToken)

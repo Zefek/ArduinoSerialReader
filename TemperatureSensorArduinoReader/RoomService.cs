@@ -1,27 +1,28 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace TemperatureSensorArduinoReader
+﻿namespace TemperatureSensorArduinoReader
 {
     internal class RoomService
     {
         private readonly RoomRepository roomRepository;
+        private readonly RabbitService rabbitService;
 
-        public RoomService(RoomRepository roomRepository)
+        public RoomService(RoomRepository roomRepository, RabbitService rabbitService)
         {
             this.roomRepository=roomRepository;
+            this.rabbitService = rabbitService;
         }
-        public void Register(SensorData sensorData, int roomId)
+
+        public async Task AddOrUpdateRoom(string areaId, string sensorName, CancellationToken cancellationToken)
         {
-            /*
-            var rooms = roomRepository.GetRooms();
-            var room = rooms.First(k=>k.Id == roomId);
-            room.SensorChannel = sensorData.C;
-            room.SensorId = sensorData.S;*/
+            var room = roomRepository.GetRooms().FirstOrDefault(k => k.Name == areaId);
+            if (room == null)
+            {
+                roomRepository.AddRoom(areaId, sensorName);
+            }
+            else
+            {
+                roomRepository.UpdateRoomSensor(room.Name, sensorName);
+                await rabbitService.Publish("", "homeassistant/sensor/" + sensorName + "_temperature/config", cancellationToken);
+            }
         }
     }
 }
