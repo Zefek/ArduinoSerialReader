@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
 using TemperatureSensorArduinoReader;
+using TemperatureSensorArduinoReader.TopicStrategies;
 
 try
 {
@@ -32,13 +33,18 @@ try
 
             var connectionString = hostContext.Configuration.GetSection("TemperatureAppSettings").GetValue<string>("ConnectionString");
             services.AddDbContext<AppDbContext>(options =>
-                options.UseNpgsql(connectionString), ServiceLifetime.Singleton);
+                options.UseNpgsql(connectionString));
 
-            services.AddSingleton<RoomRepository>();
+            services.AddScoped<RoomRepository>();
             services.AddSingleton<RabbitService>();
-            services.AddSingleton<SensorService>();
-            services.AddSingleton<SensorRepository>();
+            services.AddScoped<SensorService>();
+            services.AddScoped<SensorRepository>();
+            services.AddScoped<SensorPipeline>();
+            services.AddSingleton<TopicDispatcher>();
+            services.AddKeyedScoped<ITopicStrategy, HomeAssistantOnlineStrategy>(MqttTopics.HomeAssistantStatus);
+            services.AddKeyedScoped<ITopicStrategy, HeaterOutTempStrategy>(MqttTopics.HeaterOutTemp);
             services.AddHostedService<Worker>();
+            services.AddScoped<RoomService>();
             services.AddHostedService<HomeAssistantService>();
         })
         .Build()

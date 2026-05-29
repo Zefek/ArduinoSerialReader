@@ -19,7 +19,6 @@ namespace TemperatureSensorArduinoReader
             this.roomRepository = roomRepository;
             this.rabbitService = rabbitService;
             this.logger = logger;
-            this.rabbitService.HomeAssistantOnline += RabbitService_HomeAssistantOnline;
         }
 
         private async Task SendSensorDiscovery(string sensorName, CancellationToken cancellationToken)
@@ -34,11 +33,6 @@ namespace TemperatureSensorArduinoReader
             await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateTemperatureTrend(sensorName)), "homeassistant/sensor/" + sensorName + "_temperature_trend/config", cancellationToken);
             await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateHumidityTrend(sensorName)), "homeassistant/sensor/" + sensorName + "_humidity_trend/config", cancellationToken);
             await rabbitService.Publish(JsonConvert.SerializeObject(HomeAssistantSensor.CreateWindowOpen(sensorName)), "homeassistant/binary_sensor/" + sensorName + "_window_open/config", cancellationToken);
-        }
-
-        private async void RabbitService_HomeAssistantOnline(object? sender, EventArgs e)
-        {
-            await SendAllSensorsDiscovery(CancellationToken.None);
         }
 
         public async Task SendAllSensorsDiscovery(CancellationToken cancellationToken)

@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Hosting;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
@@ -10,7 +11,7 @@ namespace TemperatureSensorArduinoReader;
 public class HomeAssistantService : BackgroundService
 {
     private ClientWebSocket clientWebSocket = null;
-    private readonly RoomRepository roomRepository;
+    private readonly IServiceProvider serviceProvider;
     private readonly IOptions<TemperatureAppSettings> options;
     private readonly RabbitService rabbitService;
     private readonly ILogger<HomeAssistantService> logger;
@@ -20,9 +21,9 @@ public class HomeAssistantService : BackgroundService
     private DateTime? lastConnectionTry = null;
     private TimeSpan connectionTimeout = TimeSpan.Zero;
 
-    public HomeAssistantService(RoomRepository roomRepository, IOptions<TemperatureAppSettings> options, RabbitService rabbitService, ILogger<HomeAssistantService> logger)
+    public HomeAssistantService(IServiceProvider serviceProvider, IOptions<TemperatureAppSettings> options, RabbitService rabbitService, ILogger<HomeAssistantService> logger)
     {
-        this.roomRepository = roomRepository;
+        this.serviceProvider = serviceProvider;
         this.options = options;
         this.rabbitService = rabbitService;
         this.logger = logger;
@@ -51,21 +52,14 @@ public class HomeAssistantService : BackgroundService
                         type = "config/device_registry/list"
                     }, stoppingToken);
                     var devices = await ReceiveMessage(stoppingToken);
+                    using var scope = serviceProvider.CreateScope();
+                    var roomService = scope.ServiceProvider.GetService<RoomService>();
                     foreach (var device in devices.result)
                     {
                         if (device.id == deviceId && device.name.ToString().StartsWith("TX07K-TXC/") && !string.IsNullOrEmpty(device.area_id.ToString()))
                         {
                             var sensorName = device.name.ToString().Substring("TX07K-TXC/".Length, device.name.ToString().Length - "TX07K-TXC/".Length);
-                            var room = roomRepository.GetRooms().FirstOrDefault(k => k.Name == device.area_id.ToString());
-                            if (room == null)
-                            {
-                                roomRepository.AddRoom(device.area_id.ToString(), sensorName);
-                            }
-                            else
-                            {
-                                roomRepository.UpdateRoomSensor(room.Name, sensorName);
-                                await rabbitService.Publish("", "homeassistant/sensor/" + sensorName + "_temperature/config", stoppingToken);
-                            }
+                            await roomService.AddOrUpdateRoom(device.area_id.ToString(), sensorName, stoppingToken);
                         }
                     }
                 }
