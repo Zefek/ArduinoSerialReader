@@ -18,7 +18,7 @@ Thanks for the interest. This document is the working developer guide: where the
 
 ## Reporting issues
 
-Open issues at <https://github.com/petr-sponky/ArduinoSerialReader/issues>. A useful report contains:
+Open issues at <https://github.com/zefek/ArduinoSerialReader/issues>. A useful report contains:
 
 - What you expected vs. what happened.
 - Relevant Serilog console output (mask the broker hostname/token if needed).
