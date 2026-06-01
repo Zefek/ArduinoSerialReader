@@ -1,32 +1,20 @@
+using Microsoft.EntityFrameworkCore;
+
 namespace TemperatureSensorArduinoReader;
 
 internal class SensorRepository
 {
-    private readonly List<Sensor> sensors = new();
     private readonly AppDbContext dbContext;
 
     public SensorRepository(AppDbContext dbContext)
     {
         this.dbContext = dbContext;
-        LoadStatesFromDb();
     }
 
-    private void LoadStatesFromDb()
+    public async Task Add(Sensor sensor)
     {
-        var states = dbContext.SensorStates.ToList();
-        foreach (var state in states)
-        {
-            var sensor = new Sensor(state);
-            sensors.Add(sensor);
-        }
-    }
-
-    public void Add(Sensor sensor)
-    {
-        if (sensors.Any(k => k.Id == sensor.Id && k.Channel == sensor.Channel))
+        if (await dbContext.SensorStates.AnyAsync(k => k.SensorId == sensor.Id && k.Channel == sensor.Channel))
             return;
-
-        sensors.Add(sensor);
 
         dbContext.SensorStates.Add(new SensorState
         {
@@ -38,15 +26,18 @@ internal class SensorRepository
             LastUpdate = DateTime.UtcNow,
             WindowOpen = sensor.WindowOpen
         });
-        dbContext.SaveChanges();
+        await dbContext.SaveChangesAsync();
     }
 
-    public Sensor GetSensor(int id, int channel)
+    public async Task<Sensor?> GetSensor(int id, int channel)
     {
-        return sensors.FirstOrDefault(k => k.Id == id && k.Channel == channel);
+        return await dbContext.SensorStates
+            .Where(k => k.SensorId == id && k.Channel == channel)
+            .Select(k=> new Sensor(k))
+            .FirstOrDefaultAsync();
     }
 
-    public void SaveState(Sensor sensor)
+    public async Task SaveState(Sensor sensor)
     {
         var state = dbContext.SensorStates.FirstOrDefault(s => s.SensorId == sensor.Id && s.Channel == sensor.Channel);
         if (state != null)
@@ -55,11 +46,11 @@ internal class SensorRepository
             state.HumidityEma = sensor.HumidityEmaValue;
             state.LastUpdate = sensor.LastUpdateUtc;
             state.WindowOpen = sensor.WindowOpen;
-            dbContext.SaveChanges();
+            await dbContext.SaveChangesAsync();
         }
     }
 
-    public void SaveReading(Sensor sensor)
+    public async Task SaveReading(Sensor sensor)
     {
         dbContext.SensorReadings.Add(new SensorReading
         {
@@ -74,6 +65,6 @@ internal class SensorRepository
             HumidityTrend = sensor.HumidityTrend,
             WindowOpen = sensor.WindowOpen
         });
-        dbContext.SaveChanges();
+        await dbContext.SaveChangesAsync();
     }
 }

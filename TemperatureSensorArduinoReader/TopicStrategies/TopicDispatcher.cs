@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using System.Buffers;
 
 namespace TemperatureSensorArduinoReader.TopicStrategies;
 
@@ -11,7 +12,7 @@ public class TopicDispatcher
         this.serviceProvider = serviceProvider;
     }
 
-    public async Task Dispatch(string topic, byte[] payload, CancellationToken cancellationToken)
+    public async Task Dispatch(string topic, ReadOnlySequence<byte> payload, CancellationToken cancellationToken)
     {
         using var scope = serviceProvider.CreateScope();
         var strategy = scope.ServiceProvider.GetKeyedService<ITopicStrategy>(topic);

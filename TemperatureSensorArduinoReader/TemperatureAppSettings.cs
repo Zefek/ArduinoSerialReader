@@ -1,12 +1,12 @@
 ﻿public class TemperatureAppSettings
 {
-    public string MqttBroker { get; set; }
+    public required string MqttBroker { get; set; }
     public int MqttPort { get; set; }
-    public string MQTTUsername { get; set; }
-    public string MQTTPassword { get; set; }
-    public string COMPort { get; set; }
-    public string HomeAssistantWebSocket { get; set; }
-    public string HomeAssistantToken { get; set; }
-    public string ConnectionString { get; set; }
-    public string LokiUrl { get; set; }
+    public required string MQTTUsername { get; set; }
+    public required string MQTTPassword { get; set; }
+    public required string COMPort { get; set; }
+    public required string HomeAssistantWebSocket { get; set; }
+    public required string HomeAssistantToken { get; set; }
+    public required string ConnectionString { get; set; }
+    public required string LokiUrl { get; set; }
 }

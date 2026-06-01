@@ -23,7 +23,7 @@ namespace TemperatureSensorArduinoReader
         internal double TemperatureTrend { get; private set; }
         internal double HumidityTrend { get; private set; }
 
-        public byte[] Data { get; set; }
+        public byte[]? Data { get; set; }
 
         internal string Name => Id.ToString() + "_" + Channel.ToString();
 
@@ -91,39 +91,6 @@ namespace TemperatureSensorArduinoReader
                 TemperatureUp = (sensorData.Data[1] & 0x01) != 0;
                 ForcedTransmition = (sensorData.Data[1] & 0x08) != 0;
                 Data = sensorData.Data.ToArray();
-            }
-            else
-            {
-                if (sensorData.Payload.Length != 5)
-                {
-                    throw new Exception("Invalid payload length");
-                }
-                byte[] bytes = new byte[sensorData.Payload.Length];
-                for (int i = 0; i < sensorData.Payload.Length; i++)
-                {
-                    bytes[i] = (byte)int.Parse(sensorData.Payload[i].ToString(), System.Globalization.NumberStyles.HexNumber);
-                }
-                Id = bytes[0];
-                Temperature = (((bytes[2] + bytes[3] & 0xF0) * (double)0.1) - 90 - 32) * ((double)5 / 9);
-                Humidity = (bytes[3] & 0x0F * 10) + bytes[4] & 0xF0;
-                Channel = bytes[4] & 0x0F;
-                BatteryLow = (bytes[1] & 0x04) != 0;
-                TemperatureDown = (bytes[1] & 0x02) != 0;
-                TemperatureUp = (bytes[1] & 0x01) != 0;
-                ForcedTransmition = (bytes[1] & 0x08) != 0;
-                byte[] toCheckCRC = new byte[sensorData.Payload.Length];
-                for (int i = 0; i < sensorData.Payload.Length; i++)
-                {
-                    toCheckCRC[i] = bytes[i];
-                }
-                var third = bytes[1] & 0xF0;
-                var last = bytes[4] & 0x0F;
-                toCheckCRC[1] = (byte)(bytes[4] & 0x0F + bytes[1] & 0x0F);
-                toCheckCRC[4] = (byte)(bytes[1] & 0xF0 + bytes[4] & 0xF0);
-                if (!CheckCRC(toCheckCRC, bytes[2]))
-                {
-                    throw new Exception("CRC checksum is invalid");
-                }
             }
             ComputeEma();
             var a = 17.62;

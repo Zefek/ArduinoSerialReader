@@ -19,13 +19,16 @@ try
         .UseSerilog((context, services, configuration) =>
         {
             var settings = context.Configuration.GetSection("TemperatureAppSettings").Get<TemperatureAppSettings>();
-            configuration
-                .ReadFrom.Configuration(context.Configuration)
-                .WriteTo.Console()
-                .WriteTo.GrafanaLoki(settings.LokiUrl, labels: new[]
-                {
+            if (settings != null)
+            {
+                configuration
+                    .ReadFrom.Configuration(context.Configuration)
+                    .WriteTo.Console()
+                    .WriteTo.GrafanaLoki(settings.LokiUrl, labels: new[]
+                    {
                     new LokiLabel { Key = "app", Value = "TemperatureSensorArduinoReader" }
-                });
+                    });
+            }
         })
         .ConfigureServices((hostContext, services) =>
         {
