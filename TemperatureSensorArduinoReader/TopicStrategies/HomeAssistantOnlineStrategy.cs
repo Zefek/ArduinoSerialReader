@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 
 namespace TemperatureSensorArduinoReader.TopicStrategies;
@@ -11,7 +12,7 @@ internal class HomeAssistantOnlineStrategy : ITopicStrategy
         this.sensorService = sensorService;
     }
 
-    public async Task Handle(string topic, byte[] payload, CancellationToken cancellationToken)
+    public async Task Handle(string topic, ReadOnlySequence<byte> payload, CancellationToken cancellationToken)
     {
         if (Encoding.UTF8.GetString(payload) == "online")
         {

@@ -20,10 +20,10 @@ internal class SensorPipeline
         try
         {
             var sensor = new Sensor(data);
-            var existingSensor = sensorRepository.GetSensor(sensor.Id, sensor.Channel);
+            var existingSensor = await sensorRepository.GetSensor(sensor.Id, sensor.Channel);
             if (existingSensor == null)
             {
-                sensorRepository.Add(sensor);
+                await sensorRepository.Add(sensor);
                 logger.LogInformation("New sensor added: {sensor}", sensor.Name);
                 existingSensor = sensor;
             }
@@ -32,8 +32,8 @@ internal class SensorPipeline
                 existingSensor.Update(data);
                 logger.LogInformation("Sensor updated: {sensor}", sensor.Name);
             }
-            sensorRepository.SaveState(existingSensor);
-            sensorRepository.SaveReading(existingSensor);
+            await sensorRepository.SaveState(existingSensor);
+            await sensorRepository.SaveReading(existingSensor);
             await sensorService.PublishSensorData(existingSensor, cancellationToken);
         }
         catch (Exception ex)

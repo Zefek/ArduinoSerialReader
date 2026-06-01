@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 namespace TemperatureSensorArduinoReader;
 internal class Worker : BackgroundService
 {
-    private SerialPort serialPort;
+    private SerialPort? serialPort;
     private readonly IOptions<TemperatureAppSettings> options;
     private readonly ILogger<Worker> logger;
     private readonly IServiceProvider serviceProvider;
@@ -32,7 +32,7 @@ internal class Worker : BackgroundService
 
         using var scope = serviceProvider.CreateScope();
         var sensorService = scope.ServiceProvider.GetService<SensorService>();
-        await sensorService.SendAllSensorsDiscovery(stoppingToken);
+        await sensorService!.SendAllSensorsDiscovery(stoppingToken);
         serialPort = new SerialPort(options.Value.COMPort, 9600);
         serialPort.DataReceived += Sp_DataReceived;
         serialPort.Open();
@@ -47,7 +47,7 @@ internal class Worker : BackgroundService
     {
         logger.LogInformation("Data received at: {time}", DateTimeOffset.Now);
         Thread.Sleep(1000);
-        var buffer = new byte[serialPort.BytesToRead];
+        var buffer = new byte[serialPort!.BytesToRead];
         serialPort.Read(buffer, 0, serialPort.BytesToRead);
         await ProcessBuffer(buffer, cancellationToken);
     }
@@ -73,7 +73,7 @@ internal class Worker : BackgroundService
                     logger.LogInformation("Data received: {data}", sb.ToString());
                     using var scope = serviceProvider.CreateScope();
                     var sensorPipeline = scope.ServiceProvider.GetService<SensorPipeline>();
-                    await sensorPipeline.Process(new SensorData { Data = data.ToArray() }, cancellationToken);
+                    await sensorPipeline!.Process(new SensorData { Data = data.ToArray() }, cancellationToken);
                 }
                 data.Clear();
             }

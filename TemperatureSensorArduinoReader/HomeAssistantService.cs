@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -10,7 +11,7 @@ using System.Text;
 namespace TemperatureSensorArduinoReader;
 public class HomeAssistantService : BackgroundService
 {
-    private ClientWebSocket clientWebSocket = null;
+    private ClientWebSocket? clientWebSocket = null;
     private readonly IServiceProvider serviceProvider;
     private readonly IOptions<TemperatureAppSettings> options;
     private readonly RabbitService rabbitService;
@@ -54,12 +55,15 @@ public class HomeAssistantService : BackgroundService
                     var devices = await ReceiveMessage(stoppingToken);
                     using var scope = serviceProvider.CreateScope();
                     var roomService = scope.ServiceProvider.GetService<RoomService>();
-                    foreach (var device in devices.result)
+                    if (devices?.result != null)
                     {
-                        if (device.id == deviceId && device.name.ToString().StartsWith("TX07K-TXC/") && !string.IsNullOrEmpty(device.area_id.ToString()))
+                        foreach (var device in devices.result)
                         {
-                            var sensorName = device.name.ToString().Substring("TX07K-TXC/".Length, device.name.ToString().Length - "TX07K-TXC/".Length);
-                            await roomService.AddOrUpdateRoom(device.area_id.ToString(), sensorName, stoppingToken);
+                            if (device.id == deviceId && device.name.ToString().StartsWith("TX07K-TXC/") && !string.IsNullOrEmpty(device.area_id.ToString()))
+                            {
+                                var sensorName = device.name.ToString().Substring("TX07K-TXC/".Length, device.name.ToString().Length - "TX07K-TXC/".Length);
+                                await roomService!.AddOrUpdateRoom(device.area_id.ToString(), sensorName, stoppingToken);
+                            }
                         }
                     }
                 }
@@ -84,6 +88,11 @@ public class HomeAssistantService : BackgroundService
             var resultAuthRequired = await ReceiveMessage(stoppingToken, force: true);
             await SendMessage(new { type = "auth", access_token = options.Value.HomeAssistantToken }, stoppingToken, force: true);
             var resultOk = await ReceiveMessage(stoppingToken, force: true);
+            if(resultOk?.type == null)
+            {
+                logger.LogError("Connecting to Home Assistant returns null in result of auth message.");
+                return;
+            }
             if (resultOk.type != "auth_ok")
             {
                 string message = JsonConvert.SerializeObject(resultOk);
@@ -124,19 +133,22 @@ public class HomeAssistantService : BackgroundService
         {
             try
             {
-                await clientWebSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(value))), WebSocketMessageType.Text, true, cancellationToken);
+                if (clientWebSocket != null)
+                {
+                    await clientWebSocket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(value))), WebSocketMessageType.Text, true, cancellationToken);
+                }
             }
             catch(Exception ex)
             {
                 logger.LogError(ex, "Error sending message to Home Assistant");
-                clientWebSocket.Dispose();
+                clientWebSocket?.Dispose();
                 clientWebSocket = null;
                 connected = false;
             }
         }
     }
 
-    private async Task<dynamic> ReceiveMessage(CancellationToken cancellationToken, bool force = false)
+    private async Task<dynamic?> ReceiveMessage(CancellationToken cancellationToken, bool force = false)
     {
         if (connected || force)
         {
@@ -146,10 +158,17 @@ public class HomeAssistantService : BackgroundService
                 var sb = new StringBuilder();
                 do
                 {
-                    var buffer = new byte[4096];
-                    var result = await clientWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
-                    endOfMessage = result.EndOfMessage;
-                    sb.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+                    if (clientWebSocket == null)
+                    {
+                        endOfMessage = true;
+                    }
+                    else
+                    {
+                        var buffer = new byte[4096];
+                        var result = await clientWebSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken);
+                        endOfMessage = result.EndOfMessage;
+                        sb.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+                    }
                 } while (!endOfMessage);
                 logger.LogDebug("Message received from Home Assistant: {message}", sb.ToString());
                 return JsonConvert.DeserializeObject(sb.ToString());
@@ -157,7 +176,7 @@ public class HomeAssistantService : BackgroundService
             catch(Exception ex)
             {
                 logger.LogError(ex, "Error receiving message from Home Assistant");
-                clientWebSocket.Dispose();
+                clientWebSocket?.Dispose();
                 clientWebSocket = null;
                 connected = false;
                 return null;
@@ -168,8 +187,8 @@ public class HomeAssistantService : BackgroundService
 
     public override Task StopAsync(CancellationToken cancellationToken)
     {
-        clientWebSocket.Abort();
-        clientWebSocket.Dispose();
+        clientWebSocket?.Abort();
+        clientWebSocket?.Dispose();
         return base.StopAsync(cancellationToken);
     }
 }

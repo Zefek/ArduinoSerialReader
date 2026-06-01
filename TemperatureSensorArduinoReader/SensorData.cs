@@ -8,8 +8,6 @@ namespace TemperatureSensorArduinoReader
 {
     internal class SensorData
     {
-        public string Payload {  get; set; }
-
-        public byte[] Data { get; set; }
+        public required byte[] Data { get; set; }
     }
 }

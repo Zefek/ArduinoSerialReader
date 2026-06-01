@@ -9,7 +9,7 @@ namespace TemperatureSensorArduinoReader
 
         [Required]
         [MaxLength(50)]
-        public string SensorName { get; set; }
+        public required string SensorName { get; set; }
 
         public int SensorId { get; set; }
 
