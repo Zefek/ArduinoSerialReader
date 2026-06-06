@@ -33,7 +33,7 @@ internal class SensorRepository
     {
         return await dbContext.SensorStates
             .Where(k => k.SensorId == id && k.Channel == channel)
-            .Select(k=> new Sensor(k))
+            .Select(k => new Sensor(k))
             .FirstOrDefaultAsync();
     }
 

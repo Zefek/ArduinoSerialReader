@@ -3,7 +3,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MQTTnet;
 using MQTTnet.Formatter;
-using System;
 using System.Text;
 using TemperatureSensorArduinoReader.TopicStrategies;
 
@@ -74,6 +73,7 @@ namespace TemperatureSensorArduinoReader
             mqttConnectionTimeout = TimeSpan.Zero;
             await managedMqttClientPublisher.SubscribeAsync(new MqttTopicFilterBuilder().WithTopic(MqttTopics.HomeAssistantStatus).Build(), cancellationTokenSource.Token);
             await managedMqttClientPublisher.SubscribeAsync(new MqttTopicFilterBuilder().WithTopic(MqttTopics.HeaterOutTemp).Build(), cancellationTokenSource.Token);
+            await managedMqttClientPublisher.SubscribeAsync(new MqttTopicFilterBuilder().WithTopic(MqttTopics.GarageTemperature).Build(), cancellationTokenSource.Token);
         }
 
         private async Task Disconnected(MqttClientDisconnectedEventArgs e)
@@ -132,7 +132,7 @@ namespace TemperatureSensorArduinoReader
 
         public void Dispose()
         {
-            managedMqttClientPublisher?.DisconnectAsync(cancellationToken:cancellationTokenSource.Token).Wait();
+            managedMqttClientPublisher?.DisconnectAsync(cancellationToken: cancellationTokenSource.Token).Wait();
             managedMqttClientPublisher?.Dispose();
             managedMqttClientPublisher = null;
             cancellationTokenSource.Dispose();

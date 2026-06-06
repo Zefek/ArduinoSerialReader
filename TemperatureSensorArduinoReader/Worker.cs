@@ -2,27 +2,28 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System;
-using System.Collections.Generic;
+using System.Buffers;
 using System.IO.Ports;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
+using TemperatureSensorArduinoReader.Resolvers;
 
 namespace TemperatureSensorArduinoReader;
+
 internal class Worker : BackgroundService
 {
     private SerialPort? serialPort;
     private readonly IOptions<TemperatureAppSettings> options;
     private readonly ILogger<Worker> logger;
     private readonly IServiceProvider serviceProvider;
+    private readonly TX07K_TXC_Resolver resolver;
     private CancellationToken cancellationToken;
 
-    public Worker(IOptions<TemperatureAppSettings> options, ILogger<Worker> logger, IServiceProvider serviceProvider)
+    public Worker(IOptions<TemperatureAppSettings> options, ILogger<Worker> logger, IServiceProvider serviceProvider, TX07K_TXC_Resolver resolver)
     {
         this.options = options;
         this.logger = logger;
         this.serviceProvider = serviceProvider;
+        this.resolver = resolver;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -73,7 +74,9 @@ internal class Worker : BackgroundService
                     logger.LogInformation("Data received: {data}", sb.ToString());
                     using var scope = serviceProvider.CreateScope();
                     var sensorPipeline = scope.ServiceProvider.GetService<SensorPipeline>();
-                    await sensorPipeline!.Process(new SensorData { Data = data.ToArray() }, cancellationToken);
+                    var payload = new ReadOnlySequence<byte>(data.ToArray(), 0, data.Count);
+                    var sensorData = resolver.Resolve(payload);
+                    await sensorPipeline!.Process(sensorData, cancellationToken);
                 }
                 data.Clear();
             }
