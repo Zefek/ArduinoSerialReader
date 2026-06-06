@@ -1,11 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace TemperatureSensorArduinoReader
+﻿namespace TemperatureSensorArduinoReader
 {
     internal class Sensor
     {
@@ -22,8 +15,6 @@ namespace TemperatureSensorArduinoReader
         internal bool WindowOpen { get; private set; }
         internal double TemperatureTrend { get; private set; }
         internal double HumidityTrend { get; private set; }
-
-        public byte[]? Data { get; set; }
 
         internal string Name => Id.ToString() + "_" + Channel.ToString();
 
@@ -62,36 +53,15 @@ namespace TemperatureSensorArduinoReader
 
         private void SetSensorData(SensorData sensorData)
         {
-            if (sensorData.Data.Any())
-            {
-                // Split 5 bytes into 10 nibbles (as Arduino TX07K protocol works with nibbles)
-                var nibbles = new byte[10];
-                for (int i = 0; i < 5; i++)
-                {
-                    nibbles[i * 2] = (byte)((sensorData.Data[i] >> 4) & 0x0F);
-                    nibbles[i * 2 + 1] = (byte)(sensorData.Data[i] & 0x0F);
-                }
+            Id = sensorData.Id;
+            Temperature = sensorData.Temperature;
+            Humidity = sensorData.Humidity;
+            Channel = sensorData.Channel;
+            BatteryLow = sensorData.BatteryLow;
+            TemperatureDown = sensorData.TemperatureDown;
+            TemperatureUp = sensorData.TemperatureUp;
+            ForcedTransmition = sensorData.ForcedTransmition;
 
-                // CRC check: nibble[2] is CRC, swap position 2 with position 9 before checking
-                var crc = nibbles[2];
-                var toCheck = new byte[10];
-                Array.Copy(nibbles, toCheck, 10);
-                toCheck[2] = nibbles[9];
-                if (!CheckCRC(toCheck, crc))
-                {
-                    throw new Exception("CRC checksum is invalid");
-                }
-
-                Id = sensorData.Data[0];
-                Temperature = ((((sensorData.Data[2] << 4) + ((sensorData.Data[3] & 0xF0) >> 4)) * (double)0.1) - 90 - 32) * ((double)5 / 9);
-                Humidity = ((sensorData.Data[3] & 0x0F) * 10) + ((sensorData.Data[4] & 0xF0) >> 4);
-                Channel = sensorData.Data[4] & 0x0F;
-                BatteryLow = (sensorData.Data[1] & 0x04) != 0;
-                TemperatureDown = (sensorData.Data[1] & 0x02) != 0;
-                TemperatureUp = (sensorData.Data[1] & 0x01) != 0;
-                ForcedTransmition = (sensorData.Data[1] & 0x08) != 0;
-                Data = sensorData.Data.ToArray();
-            }
             ComputeEma();
             var a = 17.62;
             var b = 243.12;
@@ -105,27 +75,6 @@ namespace TemperatureSensorArduinoReader
         public void Update(SensorData sensorData)
         {
             SetSensorData(sensorData);
-        }
-
-        private bool CheckCRC(byte[] nibbles, byte crc)
-        {
-            int rem = 0;
-            for (int i = 0; i < 9; i++)
-            {
-                for (int j = 0; j < 4; j++)
-                {
-                    if ((rem & 0x08) != 0)
-                    {
-                        rem = (rem << 1) ^ 3;
-                    }
-                    else
-                    {
-                        rem <<= 1;
-                    }
-                }
-                rem ^= nibbles[i];
-            }
-            return (rem & 0x0F) == crc;
         }
 
         private void ComputeEma()

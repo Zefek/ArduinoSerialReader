@@ -7,7 +7,7 @@
 
         public RoomService(RoomRepository roomRepository, RabbitService rabbitService)
         {
-            this.roomRepository=roomRepository;
+            this.roomRepository = roomRepository;
             this.rabbitService = rabbitService;
         }
 

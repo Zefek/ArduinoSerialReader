@@ -2,10 +2,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Sinks.Grafana.Loki;
 using TemperatureSensorArduinoReader;
+using TemperatureSensorArduinoReader.Resolvers;
 using TemperatureSensorArduinoReader.TopicStrategies;
 
 try
@@ -44,8 +44,11 @@ try
             services.AddScoped<SensorRepository>();
             services.AddScoped<SensorPipeline>();
             services.AddSingleton<TopicDispatcher>();
+            services.AddSingleton<TX07K_TXC_Resolver>();
+            services.AddSingleton<GarageResolver>();
             services.AddKeyedScoped<ITopicStrategy, HomeAssistantOnlineStrategy>(MqttTopics.HomeAssistantStatus);
             services.AddKeyedScoped<ITopicStrategy, HeaterOutTempStrategy>(MqttTopics.HeaterOutTemp);
+            services.AddKeyedScoped<ITopicStrategy, GarageTemperatureStrategy>(MqttTopics.GarageTemperature);
             services.AddHostedService<Worker>();
             services.AddScoped<RoomService>();
             services.AddHostedService<HomeAssistantService>();

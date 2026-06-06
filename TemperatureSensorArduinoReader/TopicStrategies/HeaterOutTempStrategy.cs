@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using System.Buffers;
+using TemperatureSensorArduinoReader.Resolvers;
 
 namespace TemperatureSensorArduinoReader.TopicStrategies;
 
@@ -9,11 +10,13 @@ internal class HeaterOutTempStrategy : ITopicStrategy
 
     private readonly SensorPipeline sensorPipeline;
     private readonly ILogger<HeaterOutTempStrategy> logger;
+    private readonly TX07K_TXC_Resolver resolver;
 
-    public HeaterOutTempStrategy(SensorPipeline sensorPipeline, ILogger<HeaterOutTempStrategy> logger)
+    public HeaterOutTempStrategy(SensorPipeline sensorPipeline, ILogger<HeaterOutTempStrategy> logger, TX07K_TXC_Resolver resolver)
     {
         this.sensorPipeline = sensorPipeline;
         this.logger = logger;
+        this.resolver = resolver;
     }
 
     public async Task Handle(string topic, ReadOnlySequence<byte> payload, CancellationToken cancellationToken)
@@ -23,6 +26,7 @@ internal class HeaterOutTempStrategy : ITopicStrategy
             logger.LogWarning("Invalid sensor frame on topic {topic}: expected {expected} bytes, got {actual}", topic, FrameLength, payload.Length);
             return;
         }
-        await sensorPipeline.Process(new SensorData { Data = payload.ToArray() }, cancellationToken);
+        var sensorData = resolver.Resolve(payload);
+        await sensorPipeline.Process(sensorData, cancellationToken);
     }
 }
