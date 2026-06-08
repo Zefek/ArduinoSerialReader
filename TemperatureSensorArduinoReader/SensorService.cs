@@ -62,7 +62,7 @@ namespace TemperatureSensorArduinoReader
                 absoluteHumidity = Math.Round(sensor.AbsoluteHumidity, 1),
                 temperatureTrend = Math.Round(sensor.TemperatureTrend, 1),
                 humidityTrend = Math.Round(sensor.HumidityTrend, 1),
-                windowOpen = sensor.WindowOpen ? "ON" : "OFF"
+                windowOpen = sensor.WindowOpen && (room?.HasWindow ?? false) ? "ON" : "OFF"
             });
 
             logger.LogInformation("Publishing data for sensor {sensor} to topic TX07KTXC/{topic}/state: {data}", sensor.Name, topic, body);
