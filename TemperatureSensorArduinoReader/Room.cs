@@ -17,5 +17,7 @@ namespace TemperatureSensorArduinoReader
 
         [MaxLength(50)]
         public string? SensorNewName { get; set; }
+
+        public bool HasWindow { get; set; } = false;
     }
 }
