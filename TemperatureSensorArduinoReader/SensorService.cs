@@ -1,10 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace TemperatureSensorArduinoReader
 {
@@ -48,7 +43,7 @@ namespace TemperatureSensorArduinoReader
             var rooms = roomRepository.GetRooms();
             var topic = sensor.Name;
             var room = rooms.FirstOrDefault(k => k.SensorName == sensor.Name) ?? rooms.FirstOrDefault(k => k.SensorNewName == sensor.Name);
-            if(room != null)
+            if (room != null)
             {
                 logger.LogInformation(topic + " assigned to room " + room.Name + ", publishing to topic " + room.SensorName);
                 topic = room.SensorName;
@@ -61,17 +56,17 @@ namespace TemperatureSensorArduinoReader
             {
                 temperature = Math.Round(sensor.Temperature, 1),
                 humidity = sensor.Humidity,
-                battery = sensor.BatteryLow? "ON":"OFF",
-                trend = sensor.TemperatureUp? "↗" : sensor.TemperatureDown? "↘" : "→",
+                battery = sensor.BatteryLow ? "ON" : "OFF",
+                trend = sensor.TemperatureUp ? "↗" : sensor.TemperatureDown ? "↘" : "→",
                 dewPoint = Math.Round(sensor.DewPoint, 1),
                 absoluteHumidity = Math.Round(sensor.AbsoluteHumidity, 1),
                 temperatureTrend = Math.Round(sensor.TemperatureTrend, 1),
                 humidityTrend = Math.Round(sensor.HumidityTrend, 1),
                 windowOpen = sensor.WindowOpen && (room?.HasWindow ?? false) ? "ON" : "OFF"
             });
-            
+
             logger.LogInformation("Publishing data for sensor {sensor} to topic TX07KTXC/{topic}/state: {data}", sensor.Name, topic, body);
-            await rabbitService.Publish(body, "TX07KTXC/" + topic+"/state", cancellationToken);
+            await rabbitService.Publish(body, "TX07KTXC/" + topic + "/state", cancellationToken);
         }
     }
 }

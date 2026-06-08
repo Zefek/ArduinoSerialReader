@@ -1,11 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics.Metrics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿namespace TemperatureSensorArduinoReader;
 
-namespace TemperatureSensorArduinoReader;
 public class HomeAssistantSensor
 {
     public static dynamic CreateTemperature(string sensorName)
