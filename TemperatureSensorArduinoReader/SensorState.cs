@@ -17,7 +17,7 @@ namespace TemperatureSensorArduinoReader
 
         public double TemperatureEma { get; set; }
 
-        public double HumidityEma { get; set; }
+        public double AbsoluteHumidityEma { get; set; }
 
         public DateTime LastUpdate { get; set; }
 

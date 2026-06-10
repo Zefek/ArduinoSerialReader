@@ -18,18 +18,20 @@
 
         internal string Name => Id.ToString() + "_" + Channel.ToString();
 
-        private const double alpha = 0.182;
-        private const double temperatureOpenThreshold = -0.7; // °C/min (pokles)
-        private const double temperatureCloseThreshold = -0.1; // °C/min (pokles po otevření)
-        private const double humidityOpenThreshold = -12; // %RH/min (pokles)
-        private const double humidityCloseThreshold = -5; // %RH/min
+        private const double temperatureOpenThreshold = -0.7; // °C/h (pokles)
+        private const double temperatureCloseThreshold = -0.1; // °C/h (pokles po otevření)
+        private const double humidityOpenThreshold = -1.5; // g/m3/h (pokles)
+        private const double humidityCloseThreshold = -0.6; // g/m3/h
+        private const int sensorMinReceiveInterval = 30; //30s
+        private const int sensorMaxReceiveInterval = 1; //1h
+        private const int tauSeconds = 750;
 
         private double temperatureEma = 0;
-        private double humidityEma = 0;
+        private double absoluteHumidityEma = 0;
         private DateTime lastUpdate = DateTime.MinValue;
 
         internal double TemperatureEmaValue => temperatureEma;
-        internal double HumidityEmaValue => humidityEma;
+        internal double AbsoluteHumidityEmaValue => absoluteHumidityEma;
         internal DateTime LastUpdateUtc => lastUpdate;
 
 
@@ -46,7 +48,7 @@
             Id = state.SensorId;
             Channel = state.Channel;
             temperatureEma = state.TemperatureEma;
-            humidityEma = state.HumidityEma;
+            absoluteHumidityEma = state.AbsoluteHumidityEma;
             lastUpdate = state.LastUpdate;
             WindowOpen = state.WindowOpen;
         }
@@ -62,7 +64,6 @@
             TemperatureUp = sensorData.TemperatureUp;
             ForcedTransmition = sensorData.ForcedTransmition;
 
-            ComputeEma();
             var a = 17.62;
             var b = 243.12;
             var gamma = (a * Temperature) / (b + Temperature) + Math.Log((double)Humidity / 100);
@@ -70,6 +71,7 @@
             var es = 6.112 * Math.Exp((a * Temperature) / (b + Temperature));
 
             AbsoluteHumidity = es * Humidity * 2.1674 / (273.15 + Temperature);
+            ComputeEma();
         }
 
         public void Update(SensorData sensorData)
@@ -79,20 +81,37 @@
 
         private void ComputeEma()
         {
+            var currentDateTime = DateTime.UtcNow;
             if (lastUpdate == DateTime.MinValue)
             {
                 temperatureEma = (double)Temperature;
-                humidityEma = (double)Humidity;
-                lastUpdate = DateTime.UtcNow;
+                absoluteHumidityEma = (double)AbsoluteHumidity;
+                lastUpdate = currentDateTime;
                 return;
             }
 
-            var newTemperatureEma = (alpha * (double)Temperature) + ((1 - alpha) * temperatureEma);
-            var newHumidityEma = (alpha * (double)Humidity) + ((1 - alpha) * humidityEma);
+            var totalSeconds = (currentDateTime - lastUpdate).TotalSeconds;
+            var totalHours = (currentDateTime - lastUpdate).TotalHours;
 
-            var currentDateTime = DateTime.UtcNow;
-            TemperatureTrend = (newTemperatureEma - temperatureEma) / (currentDateTime - lastUpdate).TotalHours;
-            HumidityTrend = (newHumidityEma - humidityEma) / (currentDateTime - lastUpdate).TotalHours;
+            if (totalSeconds < sensorMinReceiveInterval)
+            {
+                return;
+            }
+            if (totalHours > sensorMaxReceiveInterval)
+            {
+                temperatureEma = (double)Temperature;
+                absoluteHumidityEma = (double)AbsoluteHumidity;
+                lastUpdate = currentDateTime;
+                return;
+            }
+
+            var a = 1.0 - Math.Exp(-totalSeconds / tauSeconds);
+
+            var newTemperatureEma = (a * (double)Temperature) + ((1 - a) * temperatureEma);
+            var newAbsoluteHumidityEma = (a * (double)AbsoluteHumidity) + ((1 - a) * absoluteHumidityEma);
+
+            TemperatureTrend = (newTemperatureEma - temperatureEma) / totalHours;
+            HumidityTrend = (newAbsoluteHumidityEma - absoluteHumidityEma) / totalHours;
 
             if (!WindowOpen && TemperatureTrend <= temperatureOpenThreshold && HumidityTrend <= humidityOpenThreshold)
             {
@@ -105,7 +124,7 @@
             }
 
             temperatureEma = newTemperatureEma;
-            humidityEma = newHumidityEma;
+            absoluteHumidityEma = newAbsoluteHumidityEma;
             lastUpdate = currentDateTime;
         }
     }
