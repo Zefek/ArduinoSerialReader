@@ -22,7 +22,7 @@ internal class SensorRepository
             SensorId = sensor.Id,
             Channel = sensor.Channel,
             TemperatureEma = sensor.Temperature,
-            HumidityEma = sensor.Humidity,
+            AbsoluteHumidityEma = sensor.AbsoluteHumidity,
             LastUpdate = DateTime.UtcNow,
             WindowOpen = sensor.WindowOpen
         });
@@ -43,7 +43,7 @@ internal class SensorRepository
         if (state != null)
         {
             state.TemperatureEma = sensor.TemperatureEmaValue;
-            state.HumidityEma = sensor.HumidityEmaValue;
+            state.AbsoluteHumidityEma = sensor.AbsoluteHumidityEmaValue;
             state.LastUpdate = sensor.LastUpdateUtc;
             state.WindowOpen = sensor.WindowOpen;
             await dbContext.SaveChangesAsync();

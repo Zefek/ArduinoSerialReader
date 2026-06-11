@@ -145,7 +145,7 @@ public class HomeAssistantSensor
             name = "Humidity Trend",
             state_topic = "TX07KTXC/" + sensorName + "/state",
             state_class = "measurement",
-            unit_of_measurement = "%/h",
+            unit_of_measurement = "g/m³/h",
             expire_after = 600,
             unique_id = "TX07KTXC_" + sensorName + "_humidity_trend",
             value_template = "{{ value_json.humidityTrend }}",
