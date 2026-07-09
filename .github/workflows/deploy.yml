@@ -33,6 +33,7 @@ jobs:
       ARTIFACT_NAME: ${{ github.event.inputs.artifact_name || inputs.artifact_name || 'IoTDeployer' }}
       SERVICE_NAME: ${{ vars.SERVICE_NAME }}
       TARGET_PATH: ${{ vars.TARGET_PATH }}
+      REPO: ${{ vars.REPO }}
 
     steps:
       - name: Kontrola vstupů
@@ -41,6 +42,7 @@ jobs:
           if (-not $env:ARTIFACT_RUN_ID) { throw 'Chybí artifact_run_id v payloadu deploymentu.' }
           if (-not $env:SERVICE_NAME)    { throw 'Chybí proměnná prostředí SERVICE_NAME (vars.SERVICE_NAME).' }
           if (-not $env:TARGET_PATH)     { throw 'Chybí proměnná prostředí TARGET_PATH (vars.TARGET_PATH).' }
+          if (-not $env:REPO)            { throw 'Chybí proměnná prostředí REPO (vars.REPO).' }
 
       - name: Stažení artefaktu
         uses: actions/download-artifact@v8
@@ -101,6 +103,14 @@ jobs:
               Start-Sleep -Seconds $delay
             }
           }
+
+      - uses: zefek/GithubActions/Actions/deployConfig@main
+        with:
+          repo:   ${{ vars.REPO }} 
+          auth:   ${{ secrets.REPO_TOKEN }}
+          dest:   ${{ runner.temp }}\secrets
+          device: ArduinoSerialReader
+          outdir: ${{ env.TARGET_PATH }}
 
       - name: Generate configs from secrets repo
         shell: powershell
