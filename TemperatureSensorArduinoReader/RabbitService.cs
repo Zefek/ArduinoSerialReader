@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MQTTnet;
 using MQTTnet.Formatter;
+using System.Net.Security;
 using System.Text;
 using TemperatureSensorArduinoReader.TopicStrategies;
 
@@ -18,22 +19,29 @@ namespace TemperatureSensorArduinoReader
         private readonly TopicDispatcher topicDispatcher;
         private TimeSpan mqttConnectionTimeout = TimeSpan.Zero;
         private SemaphoreSlim semaphore = new SemaphoreSlim(1, 1);
-        private readonly MqttClientTlsOptions tlsOptions = new MqttClientTlsOptions
-        {
-            UseTls = true,
-            IgnoreCertificateChainErrors = true,
-            IgnoreCertificateRevocationErrors = true,
-            AllowUntrustedCertificates = true,
-            CertificateValidationHandler = (a) => true
-        };
+        private readonly MqttClientTlsOptions tlsOptions;
 
         public RabbitService(IOptions<TemperatureAppSettings> temperatureAppSettings, ILogger<RabbitService> logger, IHostApplicationLifetime hostApplicationLifetime, TopicDispatcher topicDispatcher)
         {
             this.temperatureAppSettings = temperatureAppSettings;
             this.logger = logger;
             this.topicDispatcher = topicDispatcher;
+            tlsOptions = new MqttClientTlsOptions
+            {
+                UseTls = true,
+                CertificateValidationHandler = ValidateCertificate
+            };
             hostApplicationLifetime.ApplicationStopping.Register(Stop);
             Connect(cancellationTokenSource.Token).Wait();
+        }
+
+        private bool ValidateCertificate(MqttClientCertificateValidationEventArgs context)
+        {
+            if (context.SslPolicyErrors != SslPolicyErrors.None)
+            {
+                logger.LogWarning("MQTT TLS certificate validation errors: {errors} for {subject}", context.SslPolicyErrors, context.Certificate?.Subject);
+            }
+            return context.SslPolicyErrors == SslPolicyErrors.None;
         }
 
         private void Stop()
