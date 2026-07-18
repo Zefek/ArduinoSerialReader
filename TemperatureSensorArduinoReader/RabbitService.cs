@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MQTTnet;
 using MQTTnet.Formatter;
+using System.Linq;
 using System.Net.Security;
 using System.Text;
 using TemperatureSensorArduinoReader.TopicStrategies;
@@ -40,6 +41,16 @@ namespace TemperatureSensorArduinoReader
             if (context.SslPolicyErrors != SslPolicyErrors.None)
             {
                 logger.LogWarning("MQTT TLS certificate validation errors: {errors} for {subject}", context.SslPolicyErrors, context.Certificate?.Subject);
+                if (context.Chain != null)
+                {
+                    var chainStatus = string.Join("; ", context.Chain.ChainStatus.Select(s => $"{s.Status}: {s.StatusInformation?.Trim()}"));
+                    logger.LogWarning("MQTT TLS chain status: {chainStatus}", chainStatus);
+                    foreach (var element in context.Chain.ChainElements)
+                    {
+                        var elementStatus = string.Join(", ", element.ChainElementStatus.Select(s => s.Status.ToString()));
+                        logger.LogWarning("MQTT TLS chain element {subject}: {status}", element.Certificate.Subject, string.IsNullOrEmpty(elementStatus) ? "OK" : elementStatus);
+                    }
+                }
             }
             return context.SslPolicyErrors == SslPolicyErrors.None;
         }
