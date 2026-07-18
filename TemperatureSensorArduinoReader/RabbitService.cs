@@ -3,6 +3,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MQTTnet;
 using MQTTnet.Formatter;
+using System.Linq;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using TemperatureSensorArduinoReader.TopicStrategies;
 
@@ -18,22 +21,49 @@ namespace TemperatureSensorArduinoReader
         private readonly TopicDispatcher topicDispatcher;
         private TimeSpan mqttConnectionTimeout = TimeSpan.Zero;
         private SemaphoreSlim semaphore = new SemaphoreSlim(1, 1);
-        private readonly MqttClientTlsOptions tlsOptions = new MqttClientTlsOptions
-        {
-            UseTls = true,
-            IgnoreCertificateChainErrors = true,
-            IgnoreCertificateRevocationErrors = true,
-            AllowUntrustedCertificates = true,
-            CertificateValidationHandler = (a) => true
-        };
+        private readonly MqttClientTlsOptions tlsOptions;
 
         public RabbitService(IOptions<TemperatureAppSettings> temperatureAppSettings, ILogger<RabbitService> logger, IHostApplicationLifetime hostApplicationLifetime, TopicDispatcher topicDispatcher)
         {
             this.temperatureAppSettings = temperatureAppSettings;
             this.logger = logger;
             this.topicDispatcher = topicDispatcher;
+            tlsOptions = new MqttClientTlsOptions
+            {
+                UseTls = true,
+                CertificateValidationHandler = ValidateCertificate
+            };
             hostApplicationLifetime.ApplicationStopping.Register(Stop);
             Connect(cancellationTokenSource.Token).Wait();
+        }
+
+        private bool ValidateCertificate(MqttClientCertificateValidationEventArgs context)
+        {
+            if (context.SslPolicyErrors == SslPolicyErrors.None)
+            {
+                return true;
+            }
+
+            if (context.SslPolicyErrors == SslPolicyErrors.RemoteCertificateChainErrors
+                && context.Chain != null
+                && context.Chain.ChainStatus.All(s => s.Status is X509ChainStatusFlags.NoError or X509ChainStatusFlags.RevocationStatusUnknown or X509ChainStatusFlags.OfflineRevocation))
+            {
+                logger.LogInformation("Accepting MQTT TLS certificate {subject}; revocation status could not be checked.", context.Certificate?.Subject);
+                return true;
+            }
+
+            logger.LogWarning("MQTT TLS certificate validation errors: {errors} for {subject}", context.SslPolicyErrors, context.Certificate?.Subject);
+            if (context.Chain != null)
+            {
+                var chainStatus = string.Join("; ", context.Chain.ChainStatus.Select(s => $"{s.Status}: {s.StatusInformation?.Trim()}"));
+                logger.LogWarning("MQTT TLS chain status: {chainStatus}", chainStatus);
+                foreach (var element in context.Chain.ChainElements)
+                {
+                    var elementStatus = string.Join(", ", element.ChainElementStatus.Select(s => s.Status.ToString()));
+                    logger.LogWarning("MQTT TLS chain element {subject}: {status}", element.Certificate.Subject, string.IsNullOrEmpty(elementStatus) ? "OK" : elementStatus);
+                }
+            }
+            return false;
         }
 
         private void Stop()
