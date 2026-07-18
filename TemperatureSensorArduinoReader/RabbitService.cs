@@ -5,6 +5,7 @@ using MQTTnet;
 using MQTTnet.Formatter;
 using System.Linq;
 using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using TemperatureSensorArduinoReader.TopicStrategies;
 
@@ -38,21 +39,31 @@ namespace TemperatureSensorArduinoReader
 
         private bool ValidateCertificate(MqttClientCertificateValidationEventArgs context)
         {
-            if (context.SslPolicyErrors != SslPolicyErrors.None)
+            if (context.SslPolicyErrors == SslPolicyErrors.None)
             {
-                logger.LogWarning("MQTT TLS certificate validation errors: {errors} for {subject}", context.SslPolicyErrors, context.Certificate?.Subject);
-                if (context.Chain != null)
+                return true;
+            }
+
+            if (context.SslPolicyErrors == SslPolicyErrors.RemoteCertificateChainErrors
+                && context.Chain != null
+                && context.Chain.ChainStatus.All(s => s.Status is X509ChainStatusFlags.NoError or X509ChainStatusFlags.RevocationStatusUnknown or X509ChainStatusFlags.OfflineRevocation))
+            {
+                logger.LogInformation("Accepting MQTT TLS certificate {subject}; revocation status could not be checked.", context.Certificate?.Subject);
+                return true;
+            }
+
+            logger.LogWarning("MQTT TLS certificate validation errors: {errors} for {subject}", context.SslPolicyErrors, context.Certificate?.Subject);
+            if (context.Chain != null)
+            {
+                var chainStatus = string.Join("; ", context.Chain.ChainStatus.Select(s => $"{s.Status}: {s.StatusInformation?.Trim()}"));
+                logger.LogWarning("MQTT TLS chain status: {chainStatus}", chainStatus);
+                foreach (var element in context.Chain.ChainElements)
                 {
-                    var chainStatus = string.Join("; ", context.Chain.ChainStatus.Select(s => $"{s.Status}: {s.StatusInformation?.Trim()}"));
-                    logger.LogWarning("MQTT TLS chain status: {chainStatus}", chainStatus);
-                    foreach (var element in context.Chain.ChainElements)
-                    {
-                        var elementStatus = string.Join(", ", element.ChainElementStatus.Select(s => s.Status.ToString()));
-                        logger.LogWarning("MQTT TLS chain element {subject}: {status}", element.Certificate.Subject, string.IsNullOrEmpty(elementStatus) ? "OK" : elementStatus);
-                    }
+                    var elementStatus = string.Join(", ", element.ChainElementStatus.Select(s => s.Status.ToString()));
+                    logger.LogWarning("MQTT TLS chain element {subject}: {status}", element.Certificate.Subject, string.IsNullOrEmpty(elementStatus) ? "OK" : elementStatus);
                 }
             }
-            return context.SslPolicyErrors == SslPolicyErrors.None;
+            return false;
         }
 
         private void Stop()
