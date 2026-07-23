@@ -5,6 +5,7 @@ using MQTTnet;
 using MQTTnet.Formatter;
 using System.Linq;
 using System.Net.Security;
+using System.Diagnostics;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using TemperatureSensorArduinoReader.TopicStrategies;
@@ -19,15 +20,17 @@ namespace TemperatureSensorArduinoReader
         private readonly IOptions<TemperatureAppSettings> temperatureAppSettings;
         private readonly ILogger<RabbitService> logger;
         private readonly TopicDispatcher topicDispatcher;
+        private readonly SensorMetrics metrics;
         private TimeSpan mqttConnectionTimeout = TimeSpan.Zero;
         private SemaphoreSlim semaphore = new SemaphoreSlim(1, 1);
         private readonly MqttClientTlsOptions tlsOptions;
 
-        public RabbitService(IOptions<TemperatureAppSettings> temperatureAppSettings, ILogger<RabbitService> logger, IHostApplicationLifetime hostApplicationLifetime, TopicDispatcher topicDispatcher)
+        public RabbitService(IOptions<TemperatureAppSettings> temperatureAppSettings, ILogger<RabbitService> logger, IHostApplicationLifetime hostApplicationLifetime, TopicDispatcher topicDispatcher, SensorMetrics metrics)
         {
             this.temperatureAppSettings = temperatureAppSettings;
             this.logger = logger;
             this.topicDispatcher = topicDispatcher;
+            this.metrics = metrics;
             tlsOptions = new MqttClientTlsOptions
             {
                 UseTls = true,
@@ -100,6 +103,7 @@ namespace TemperatureSensorArduinoReader
         private async Task Connected(MqttClientConnectedEventArgs e)
         {
             logger.LogInformation("Connected to MQTT broker.");
+            metrics.SetMqttConnected(true);
             mqttConnectionTimeout = TimeSpan.Zero;
             await managedMqttClientPublisher.SubscribeAsync(new MqttTopicFilterBuilder().WithTopic(MqttTopics.HomeAssistantStatus).Build(), cancellationTokenSource.Token);
             await managedMqttClientPublisher.SubscribeAsync(new MqttTopicFilterBuilder().WithTopic(MqttTopics.HeaterOutTemp).Build(), cancellationTokenSource.Token);
@@ -110,6 +114,7 @@ namespace TemperatureSensorArduinoReader
         {
             await semaphore.WaitAsync(cancellationTokenSource.Token);
             logger.LogWarning("Disconnected from MQTT broker.");
+            metrics.SetMqttConnected(false);
             if (managedMqttClientPublisher != null)
             {
                 while (!managedMqttClientPublisher.IsConnected)
@@ -123,6 +128,7 @@ namespace TemperatureSensorArduinoReader
                     try
                     {
                         logger.LogInformation("Reconnecting to MQTT broker...");
+                        metrics.RecordMqttReconnect();
                         await managedMqttClientPublisher.ConnectAsync(BuildMQTTOptions(), cancellationTokenSource.Token);
                     }
                     catch (Exception ex)
@@ -146,15 +152,18 @@ namespace TemperatureSensorArduinoReader
             {
                 await Connect(cancellationToken);
             }
+            var start = Stopwatch.GetTimestamp();
             try
             {
                 if (managedMqttClientPublisher != null)
                 {
                     await managedMqttClientPublisher.PublishStringAsync(topic, data.ToString(), cancellationToken: cancellationToken);
+                    metrics.RecordMqttPublish(Stopwatch.GetElapsedTime(start).TotalMilliseconds);
                 }
             }
             catch (Exception ex)
             {
+                metrics.RecordMqttPublishError();
                 logger.LogError(ex, "Error publishing to MQTT broker.");
                 throw;
             }

@@ -1,0 +1,379 @@
+{
+  "title": "ArduinoSerialReader – metriky",
+  "uid": "asr-metrics",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "tags": ["asr", "iot", "otlp", "metrics"],
+  "timezone": "browser",
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "30s",
+  "templating": {
+    "list": [
+      {
+        "type": "datasource",
+        "name": "datasource",
+        "label": "Prometheus",
+        "query": "prometheus",
+        "current": {},
+        "hide": 0
+      },
+      {
+        "type": "query",
+        "name": "sensor",
+        "label": "Senzor",
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "query": "label_values(asr_sensor_temperature, sensor)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "current": { "value": "$__all", "text": "All" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Stav pipeline",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "MQTT připojení",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "description": "asr.mqtt.connected – 1 = připojeno k brokeru, 0 = odpojeno.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "1": { "text": "● Připojeno", "color": "green", "index": 0 } } },
+            { "type": "value", "options": { "0": { "text": "● Odpojeno", "color": "red", "index": 1 } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] },
+          "noValue": "● Bez dat"
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "background", "graphMode": "none", "textMode": "value", "justifyMode": "center" },
+      "targets": [ { "refId": "A", "expr": "max(asr_mqtt_connected)" } ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Čtení / min",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "description": "Rychlost úspěšně zpracovaných čtení napříč všemi senzory (asr.readings.processed).",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1,
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "yellow", "value": 0.1 }, { "color": "green", "value": 0.5 } ] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "background", "graphMode": "area" },
+      "targets": [ { "refId": "A", "expr": "sum(rate(asr_readings_processed_total[$__rate_interval])) * 60" } ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Chyby čtení (rozsah)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "description": "Počet chyb při zpracování čtení (asr.readings.errors) za zvolený časový rozsah.",
+      "fieldConfig": {
+        "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 10 } ] } },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "background", "graphMode": "none" },
+      "targets": [ { "refId": "A", "expr": "sum(increase(asr_readings_errors_total[$__range]))" } ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "MQTT chyby publikace (rozsah)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "description": "asr.mqtt.publish.errors za zvolený časový rozsah.",
+      "fieldConfig": {
+        "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 10 } ] } },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "background", "graphMode": "none" },
+      "targets": [ { "refId": "A", "expr": "sum(increase(asr_mqtt_publish_errors_total[$__range]))" } ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "DB chyby (rozsah)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "description": "asr.db.errors za zvolený časový rozsah (napříč operacemi).",
+      "fieldConfig": {
+        "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 } ] } },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "background", "graphMode": "none" },
+      "targets": [ { "refId": "A", "expr": "sum(increase(asr_db_errors_total[$__range]))" } ]
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "MQTT reconnecty (rozsah)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "description": "asr.mqtt.reconnects – počet pokusů o obnovení spojení za zvolený rozsah. Vysoké číslo = nestabilní spojení.",
+      "fieldConfig": {
+        "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 10 } ] } },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "colorMode": "background", "graphMode": "none" },
+      "targets": [ { "refId": "A", "expr": "sum(increase(asr_mqtt_reconnects_total[$__range]))" } ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Čtení za sekundu podle senzoru",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 16, "x": 0, "y": 5 },
+      "description": "rate(asr.readings.processed) na senzor. Řada spadlá na nulu = senzor přestal vysílat.",
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 15, "spanNulls": false } },
+        "overrides": []
+      },
+      "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "sum"] } },
+      "targets": [ { "refId": "A", "expr": "sum by (sensor) (rate(asr_readings_processed_total{sensor=~\"$sensor\"}[$__rate_interval]))", "legendFormat": "{{sensor}}" } ]
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Slabá baterie",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 5 },
+      "description": "asr.sensor.battery_low – aktuální stav baterie na senzor (1 = slabá).",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "OK", "color": "green", "index": 0 } } },
+            { "type": "value", "options": { "1": { "text": "Slabá", "color": "red", "index": 1 } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true }, "colorMode": "background", "graphMode": "none", "textMode": "value_and_name", "justifyMode": "auto" },
+      "targets": [ { "refId": "A", "expr": "asr_sensor_battery_low{sensor=~\"$sensor\"}", "legendFormat": "{{sensor}}", "instant": true } ]
+    },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "Senzory",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Teplota",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "description": "asr.sensor.temperature (plná) a EMA (asr.sensor.temperature_ema, tečkovaná).",
+      "fieldConfig": {
+        "defaults": { "unit": "celsius", "decimals": 1, "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 0, "spanNulls": true } },
+        "overrides": [
+          { "matcher": { "id": "byRegexp", "options": ".*EMA.*" }, "properties": [ { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [8, 6] } }, { "id": "custom.lineWidth", "value": 1 } ] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "min", "max"] } },
+      "targets": [
+        { "refId": "A", "expr": "asr_sensor_temperature{sensor=~\"$sensor\"}", "legendFormat": "{{sensor}}" },
+        { "refId": "B", "expr": "asr_sensor_temperature_ema{sensor=~\"$sensor\"}", "legendFormat": "{{sensor}} EMA" }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Relativní vlhkost",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "description": "asr.sensor.humidity.",
+      "fieldConfig": {
+        "defaults": { "unit": "humidity", "decimals": 0, "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 0, "spanNulls": true } },
+        "overrides": []
+      },
+      "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "min", "max"] } },
+      "targets": [ { "refId": "A", "expr": "asr_sensor_humidity{sensor=~\"$sensor\"}", "legendFormat": "{{sensor}}" } ]
+    },
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "Absolutní vlhkost & rosný bod",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
+      "description": "asr.sensor.absolute_humidity (g/m³) a asr.sensor.dew_point (°C).",
+      "fieldConfig": {
+        "defaults": { "decimals": 1, "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 0, "spanNulls": true } },
+        "overrides": [
+          { "matcher": { "id": "byRegexp", "options": ".*rosný.*" }, "properties": [ { "id": "unit", "value": "celsius" }, { "id": "custom.axisPlacement", "value": "right" } ] }
+        ]
+      },
+      "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "refId": "A", "expr": "asr_sensor_absolute_humidity{sensor=~\"$sensor\"}", "legendFormat": "{{sensor}} abs. vlhkost" },
+        { "refId": "B", "expr": "asr_sensor_dew_point{sensor=~\"$sensor\"}", "legendFormat": "{{sensor}} rosný bod" }
+      ]
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "Trendy (teplota / vlhkost za hodinu)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 22 },
+      "description": "asr.sensor.temperature_trend (°C/h) a asr.sensor.humidity_trend (g/m³/h). Silné poklesy spouští detekci otevřeného okna.",
+      "fieldConfig": {
+        "defaults": { "decimals": 2, "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "spanNulls": true, "axisSoftMin": -3, "axisSoftMax": 3 } },
+        "overrides": []
+      },
+      "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "min"] } },
+      "targets": [
+        { "refId": "A", "expr": "asr_sensor_temperature_trend{sensor=~\"$sensor\"}", "legendFormat": "{{sensor}} teplota" },
+        { "refId": "B", "expr": "asr_sensor_humidity_trend{sensor=~\"$sensor\"}", "legendFormat": "{{sensor}} vlhkost" }
+      ]
+    },
+    {
+      "id": 25,
+      "type": "state-timeline",
+      "title": "Otevřené okno (detekce)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 30 },
+      "description": "asr.sensor.window_open – historie detekce otevřeného okna na senzor.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "fillOpacity": 80, "lineWidth": 0 },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "Zavřeno", "color": "green", "index": 0 } } },
+            { "type": "value", "options": { "1": { "text": "Otevřeno", "color": "orange", "index": 1 } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 1 } ] }
+        },
+        "overrides": []
+      },
+      "options": { "showValue": "never", "mergeValues": true, "rowHeight": 0.9, "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } },
+      "targets": [ { "refId": "A", "expr": "asr_sensor_window_open{sensor=~\"$sensor\"}", "legendFormat": "{{sensor}}" } ]
+    },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "MQTT",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 37 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "Publikace a chyby (za s)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 38 },
+      "description": "rate(asr.mqtt.published) a rate(asr.mqtt.publish.errors).",
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 15 } },
+        "overrides": [ { "matcher": { "id": "byName", "options": "chyby" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } } ] } ]
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(asr_mqtt_published_total[$__rate_interval]))", "legendFormat": "publikace" },
+        { "refId": "B", "expr": "sum(rate(asr_mqtt_publish_errors_total[$__rate_interval]))", "legendFormat": "chyby" }
+      ]
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "Doba publikace (p50 / p95 / p99)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 38 },
+      "description": "histogram_quantile nad asr.mqtt.publish.duration (ms).",
+      "fieldConfig": {
+        "defaults": { "unit": "ms", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10 } },
+        "overrides": []
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.50, sum(rate(asr_mqtt_publish_duration_milliseconds_bucket[$__rate_interval])) by (le))", "legendFormat": "p50" },
+        { "refId": "B", "expr": "histogram_quantile(0.95, sum(rate(asr_mqtt_publish_duration_milliseconds_bucket[$__rate_interval])) by (le))", "legendFormat": "p95" },
+        { "refId": "C", "expr": "histogram_quantile(0.99, sum(rate(asr_mqtt_publish_duration_milliseconds_bucket[$__rate_interval])) by (le))", "legendFormat": "p99" }
+      ]
+    },
+    {
+      "id": 33,
+      "type": "timeseries",
+      "title": "Stav připojení",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 46 },
+      "description": "asr.mqtt.connected v čase (1 = připojeno).",
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0, "max": 1, "custom": { "drawStyle": "line", "lineWidth": 2, "lineInterpolation": "stepAfter", "fillOpacity": 25 } },
+        "overrides": []
+      },
+      "options": { "tooltip": { "mode": "single" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [ { "refId": "A", "expr": "max(asr_mqtt_connected)", "legendFormat": "připojeno" } ]
+    },
+    {
+      "id": 40,
+      "type": "row",
+      "title": "Databáze (EF Core / Npgsql)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 52 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "id": 41,
+      "type": "timeseries",
+      "title": "DB operace za s podle typu",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 53 },
+      "description": "rate(asr.db.operations) podle operace (add / get / save_state / save_reading).",
+      "fieldConfig": {
+        "defaults": { "unit": "ops", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 15, "stacking": { "mode": "normal" } } },
+        "overrides": []
+      },
+      "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull"] } },
+      "targets": [ { "refId": "A", "expr": "sum by (operation) (rate(asr_db_operations_total[$__rate_interval]))", "legendFormat": "{{operation}}" } ]
+    },
+    {
+      "id": 42,
+      "type": "timeseries",
+      "title": "Doba DB operací p95 podle typu",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 53 },
+      "description": "histogram_quantile(0.95) nad asr.db.operation.duration (ms) podle operace.",
+      "fieldConfig": {
+        "defaults": { "unit": "ms", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10 } },
+        "overrides": []
+      },
+      "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] } },
+      "targets": [ { "refId": "A", "expr": "histogram_quantile(0.95, sum(rate(asr_db_operation_duration_milliseconds_bucket[$__rate_interval])) by (le, operation))", "legendFormat": "{{operation}}" } ]
+    },
+    {
+      "id": 43,
+      "type": "timeseries",
+      "title": "Npgsql – využití poolu spojení",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 61 },
+      "description": "Vestavěné metriky Npgsql (meter \"Npgsql\"). Konkrétní názvy závisí na verzi Npgsql – pokud panel nic nevykreslí, dohledej v Prometheu metriky s prefixem db_client_connections a uprav dotaz.",
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10 } },
+        "overrides": []
+      },
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max"] } },
+      "targets": [ { "refId": "A", "expr": "sum by (state) (db_client_connections_usage)", "legendFormat": "{{state}}" } ]
+    }
+  ]
+}

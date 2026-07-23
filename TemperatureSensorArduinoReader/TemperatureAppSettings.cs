@@ -8,5 +8,6 @@
     public required string HomeAssistantWebSocket { get; set; }
     public required string HomeAssistantToken { get; set; }
     public required string ConnectionString { get; set; }
-    public required string LokiUrl { get; set; }
+    public string? HealthUrl { get; set; }
+    public string? OtlpEndpoint { get; set; }
 }

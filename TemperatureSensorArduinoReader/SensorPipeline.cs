@@ -6,12 +6,14 @@ internal class SensorPipeline
 {
     private readonly SensorRepository sensorRepository;
     private readonly SensorService sensorService;
+    private readonly SensorMetrics metrics;
     private readonly ILogger<SensorPipeline> logger;
 
-    public SensorPipeline(SensorRepository sensorRepository, SensorService sensorService, ILogger<SensorPipeline> logger)
+    public SensorPipeline(SensorRepository sensorRepository, SensorService sensorService, SensorMetrics metrics, ILogger<SensorPipeline> logger)
     {
         this.sensorRepository = sensorRepository;
         this.sensorService = sensorService;
+        this.metrics = metrics;
         this.logger = logger;
     }
 
@@ -35,9 +37,11 @@ internal class SensorPipeline
             await sensorRepository.SaveState(existingSensor);
             await sensorRepository.SaveReading(existingSensor);
             await sensorService.PublishSensorData(existingSensor, cancellationToken);
+            metrics.RecordReading(existingSensor);
         }
         catch (Exception ex)
         {
+            metrics.RecordReadingError();
             logger.LogError(ex, "Error processing sensor data: {message}", ex.Message);
         }
     }
