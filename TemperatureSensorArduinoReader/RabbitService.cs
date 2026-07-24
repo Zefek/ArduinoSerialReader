@@ -37,7 +37,7 @@ namespace TemperatureSensorArduinoReader
                 CertificateValidationHandler = ValidateCertificate
             };
             hostApplicationLifetime.ApplicationStopping.Register(Stop);
-            Connect(cancellationTokenSource.Token).Wait();
+            Connect(cancellationTokenSource.Token).Wait(hostApplicationLifetime.ApplicationStopping);
         }
 
         private bool ValidateCertificate(MqttClientCertificateValidationEventArgs context)
@@ -170,7 +170,7 @@ namespace TemperatureSensorArduinoReader
 
         public void Dispose()
         {
-            managedMqttClientPublisher?.DisconnectAsync(cancellationToken: cancellationTokenSource.Token).Wait();
+            managedMqttClientPublisher?.DisconnectAsync(cancellationToken: cancellationTokenSource.Token).Wait(CancellationToken.None);
             managedMqttClientPublisher?.Dispose();
             managedMqttClientPublisher = null;
             cancellationTokenSource.Dispose();

@@ -94,7 +94,7 @@ try
     using (var scope = app.Services.CreateScope())
     {
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        db.Database.Migrate();
+        await db.Database.MigrateAsync();
     }
 
     app.MapHealthChecks("/health/live", new HealthCheckOptions
@@ -109,7 +109,7 @@ try
         ResponseWriter = WriteHealthResponse
     });
 
-    app.Run();
+    await app.RunAsync();
 }
 catch (Exception ex)
 {
