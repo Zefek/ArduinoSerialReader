@@ -3,12 +3,12 @@ using System.Buffers;
 
 namespace TemperatureSensorArduinoReader.Resolvers;
 
-internal class TX07K_TXC_Resolver : IResolver
+internal class TX07KTXCResolver : IResolver
 {
     private const int FrameLength = 5;
-    private readonly ILogger<TX07K_TXC_Resolver> logger;
+    private readonly ILogger<TX07KTXCResolver> logger;
 
-    public TX07K_TXC_Resolver(ILogger<TX07K_TXC_Resolver> logger)
+    public TX07KTXCResolver(ILogger<TX07KTXCResolver> logger)
     {
         this.logger = logger;
     }
@@ -18,8 +18,8 @@ internal class TX07K_TXC_Resolver : IResolver
         var sensorData = payload.ToArray();
         if (payload.Length != FrameLength)
         {
-            logger.LogError("Invalid sensor frame: expected {expected} bytes, got {actual}", FrameLength, payload.Length);
-            throw new Exception("Could not resolve sensor data");
+            logger.LogError("Invalid sensor frame: expected {Expected} bytes, got {Actual}", FrameLength, payload.Length);
+            throw new InvalidOperationException("Could not resolve sensor data");
         }
         // Split 5 bytes into 10 nibbles (as Arduino TX07K protocol works with nibbles)
         var nibbles = new byte[10];
@@ -36,13 +36,13 @@ internal class TX07K_TXC_Resolver : IResolver
         toCheck[2] = nibbles[9];
         if (!CheckCRC(toCheck, crc))
         {
-            throw new Exception("CRC checksum is invalid");
+            throw new InvalidOperationException("CRC checksum is invalid");
         }
 
         return new SensorData
         {
             Id = sensorData[0],
-            Temperature = ((((sensorData[2] << 4) + ((sensorData[3] & 0xF0) >> 4)) * (double)0.1) - 90 - 32) * ((double)5 / 9),
+            Temperature = ((((sensorData[2] << 4) + ((sensorData[3] & 0xF0) >> 4)) * 0.1) - 90 - 32) * ((double)5 / 9),
             Humidity = ((sensorData[3] & 0x0F) * 10) + ((sensorData[4] & 0xF0) >> 4),
             Channel = sensorData[4] & 0x0F,
             BatteryLow = (sensorData[1] & 0x04) != 0,

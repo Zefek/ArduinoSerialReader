@@ -53,7 +53,7 @@ internal class SensorRepository
 
     public async Task SaveState(Sensor sensor)
     {
-        var state = dbContext.SensorStates.FirstOrDefault(s => s.SensorId == sensor.Id && s.Channel == sensor.Channel);
+        var state = await dbContext.SensorStates.FirstOrDefaultAsync(s => s.SensorId == sensor.Id && s.Channel == sensor.Channel);
         if (state != null)
         {
             state.TemperatureEma = sensor.TemperatureEmaValue;

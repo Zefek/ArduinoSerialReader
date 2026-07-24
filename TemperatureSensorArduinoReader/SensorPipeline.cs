@@ -26,13 +26,13 @@ internal class SensorPipeline
             if (existingSensor == null)
             {
                 await sensorRepository.Add(sensor);
-                logger.LogInformation("New sensor added: {sensor}", sensor.Name);
+                logger.LogInformation("New sensor added: {Sensor}", sensor.Name);
                 existingSensor = sensor;
             }
             else
             {
                 existingSensor.Update(data);
-                logger.LogInformation("Sensor updated: {sensor}", sensor.Name);
+                logger.LogInformation("Sensor updated: {Sensor}", sensor.Name);
             }
             await sensorRepository.SaveState(existingSensor);
             await sensorRepository.SaveReading(existingSensor);
@@ -42,7 +42,7 @@ internal class SensorPipeline
         catch (Exception ex)
         {
             metrics.RecordReadingError();
-            logger.LogError(ex, "Error processing sensor data: {message}", ex.Message);
+            logger.LogError(ex, "Error processing sensor data: {Message}", ex.Message);
         }
     }
 }

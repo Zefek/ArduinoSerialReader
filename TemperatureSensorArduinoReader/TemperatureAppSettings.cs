@@ -1,4 +1,6 @@
-﻿public class TemperatureAppSettings
+﻿namespace TemperatureSensorArduinoReader;
+
+public class TemperatureAppSettings
 {
     public required string MqttBroker { get; set; }
     public int MqttPort { get; set; }

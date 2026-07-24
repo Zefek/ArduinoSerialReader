@@ -12,9 +12,9 @@ using TemperatureSensorArduinoReader.TopicStrategies;
 
 namespace TemperatureSensorArduinoReader
 {
-    public class RabbitService : IDisposable
+    public sealed class RabbitService : IDisposable
     {
-        private CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
+        private readonly CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
         private IMqttClient? managedMqttClientPublisher;
         private static readonly Random random = new();
         private readonly IOptions<TemperatureAppSettings> temperatureAppSettings;
@@ -22,7 +22,7 @@ namespace TemperatureSensorArduinoReader
         private readonly TopicDispatcher topicDispatcher;
         private readonly SensorMetrics metrics;
         private TimeSpan mqttConnectionTimeout = TimeSpan.Zero;
-        private SemaphoreSlim semaphore = new SemaphoreSlim(1, 1);
+        private readonly SemaphoreSlim semaphore = new SemaphoreSlim(1, 1);
         private readonly MqttClientTlsOptions tlsOptions;
 
         public RabbitService(IOptions<TemperatureAppSettings> temperatureAppSettings, ILogger<RabbitService> logger, IHostApplicationLifetime hostApplicationLifetime, TopicDispatcher topicDispatcher, SensorMetrics metrics)
@@ -51,19 +51,19 @@ namespace TemperatureSensorArduinoReader
                 && context.Chain != null
                 && context.Chain.ChainStatus.All(s => s.Status is X509ChainStatusFlags.NoError or X509ChainStatusFlags.RevocationStatusUnknown or X509ChainStatusFlags.OfflineRevocation))
             {
-                logger.LogInformation("Accepting MQTT TLS certificate {subject}; revocation status could not be checked.", context.Certificate?.Subject);
+                logger.LogInformation("Accepting MQTT TLS certificate {Subject}; revocation status could not be checked.", context.Certificate?.Subject);
                 return true;
             }
 
-            logger.LogWarning("MQTT TLS certificate validation errors: {errors} for {subject}", context.SslPolicyErrors, context.Certificate?.Subject);
+            logger.LogWarning("MQTT TLS certificate validation errors: {Errors} for {Subject}", context.SslPolicyErrors, context.Certificate?.Subject);
             if (context.Chain != null)
             {
                 var chainStatus = string.Join("; ", context.Chain.ChainStatus.Select(s => $"{s.Status}: {s.StatusInformation?.Trim()}"));
-                logger.LogWarning("MQTT TLS chain status: {chainStatus}", chainStatus);
+                logger.LogWarning("MQTT TLS chain status: {ChainStatus}", chainStatus);
                 foreach (var element in context.Chain.ChainElements)
                 {
                     var elementStatus = string.Join(", ", element.ChainElementStatus.Select(s => s.Status.ToString()));
-                    logger.LogWarning("MQTT TLS chain element {subject}: {status}", element.Certificate.Subject, string.IsNullOrEmpty(elementStatus) ? "OK" : elementStatus);
+                    logger.LogWarning("MQTT TLS chain element {Subject}: {Status}", element.Certificate.Subject, string.IsNullOrEmpty(elementStatus) ? "OK" : elementStatus);
                 }
             }
             return false;
@@ -142,7 +142,7 @@ namespace TemperatureSensorArduinoReader
 
         private async Task MessageReceived(MqttApplicationMessageReceivedEventArgs e)
         {
-            logger.LogInformation("Received MQTT message on topic {topic}", e.ApplicationMessage.Topic);
+            logger.LogInformation("Received MQTT message on topic {Topic}", e.ApplicationMessage.Topic);
             await topicDispatcher.Dispatch(e.ApplicationMessage.Topic, e.ApplicationMessage.Payload, cancellationTokenSource.Token);
         }
 
@@ -161,10 +161,9 @@ namespace TemperatureSensorArduinoReader
                     metrics.RecordMqttPublish(Stopwatch.GetElapsedTime(start).TotalMilliseconds);
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 metrics.RecordMqttPublishError();
-                logger.LogError(ex, "Error publishing to MQTT broker.");
                 throw;
             }
         }

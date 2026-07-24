@@ -74,7 +74,7 @@ try
     builder.Services.AddScoped<SensorRepository>();
     builder.Services.AddScoped<SensorPipeline>();
     builder.Services.AddSingleton<TopicDispatcher>();
-    builder.Services.AddSingleton<TX07K_TXC_Resolver>();
+    builder.Services.AddSingleton<TX07KTXCResolver>();
     builder.Services.AddSingleton<GarageResolver>();
     builder.Services.AddKeyedScoped<ITopicStrategy, HomeAssistantOnlineStrategy>(MqttTopics.HomeAssistantStatus);
     builder.Services.AddKeyedScoped<ITopicStrategy, HeaterOutTempStrategy>(MqttTopics.HeaterOutTemp);
@@ -113,7 +113,7 @@ try
 }
 catch (Exception ex)
 {
-    File.WriteAllText("startup_error.txt", ex.ToString());
+    await File.WriteAllTextAsync("startup_error.txt", ex.ToString());
     throw;
 }
 
