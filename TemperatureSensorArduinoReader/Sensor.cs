@@ -84,8 +84,8 @@
             var currentDateTime = DateTime.UtcNow;
             if (lastUpdate == DateTime.MinValue)
             {
-                temperatureEma = (double)Temperature;
-                absoluteHumidityEma = (double)AbsoluteHumidity;
+                temperatureEma = Temperature;
+                absoluteHumidityEma = AbsoluteHumidity;
                 lastUpdate = currentDateTime;
                 return;
             }
@@ -99,16 +99,16 @@
             }
             if (totalHours > sensorMaxReceiveInterval)
             {
-                temperatureEma = (double)Temperature;
-                absoluteHumidityEma = (double)AbsoluteHumidity;
+                temperatureEma = Temperature;
+                absoluteHumidityEma = AbsoluteHumidity;
                 lastUpdate = currentDateTime;
                 return;
             }
 
             var a = 1.0 - Math.Exp(-totalSeconds / tauSeconds);
 
-            var newTemperatureEma = (a * (double)Temperature) + ((1 - a) * temperatureEma);
-            var newAbsoluteHumidityEma = (a * (double)AbsoluteHumidity) + ((1 - a) * absoluteHumidityEma);
+            var newTemperatureEma = (a * Temperature) + ((1 - a) * temperatureEma);
+            var newAbsoluteHumidityEma = (a * AbsoluteHumidity) + ((1 - a) * absoluteHumidityEma);
 
             TemperatureTrend = (newTemperatureEma - temperatureEma) / totalHours;
             HumidityTrend = (newAbsoluteHumidityEma - absoluteHumidityEma) / totalHours;

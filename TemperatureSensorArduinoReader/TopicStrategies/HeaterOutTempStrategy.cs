@@ -10,9 +10,9 @@ internal class HeaterOutTempStrategy : ITopicStrategy
 
     private readonly SensorPipeline sensorPipeline;
     private readonly ILogger<HeaterOutTempStrategy> logger;
-    private readonly TX07K_TXC_Resolver resolver;
+    private readonly TX07KTXCResolver resolver;
 
-    public HeaterOutTempStrategy(SensorPipeline sensorPipeline, ILogger<HeaterOutTempStrategy> logger, TX07K_TXC_Resolver resolver)
+    public HeaterOutTempStrategy(SensorPipeline sensorPipeline, ILogger<HeaterOutTempStrategy> logger, TX07KTXCResolver resolver)
     {
         this.sensorPipeline = sensorPipeline;
         this.logger = logger;
@@ -23,7 +23,7 @@ internal class HeaterOutTempStrategy : ITopicStrategy
     {
         if (payload.Length != FrameLength)
         {
-            logger.LogWarning("Invalid sensor frame on topic {topic}: expected {expected} bytes, got {actual}", topic, FrameLength, payload.Length);
+            logger.LogWarning("Invalid sensor frame on topic {Topic}: expected {Expected} bytes, got {Actual}", topic, FrameLength, payload.Length);
             return;
         }
         var sensorData = resolver.Resolve(payload);

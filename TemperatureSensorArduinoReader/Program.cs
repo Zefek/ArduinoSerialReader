@@ -1,76 +1,139 @@
+using System.Text.Json;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 using Serilog;
-using Serilog.Sinks.Grafana.Loki;
+using Serilog.Sinks.OpenTelemetry;
 using TemperatureSensorArduinoReader;
 using TemperatureSensorArduinoReader.Resolvers;
 using TemperatureSensorArduinoReader.TopicStrategies;
 
 try
 {
-    Host.CreateDefaultBuilder(args)
-        .UseWindowsService()
-        .ConfigureAppConfiguration((hostContext, config) =>
+    var builder = WebApplication.CreateBuilder(args);
+
+    builder.Host.UseWindowsService();
+
+    builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+
+    var appSettings = builder.Configuration.GetSection("TemperatureAppSettings").Get<TemperatureAppSettings>();
+
+    builder.Host.UseSerilog((context, services, configuration) =>
+    {
+        if (appSettings != null)
         {
-            config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
-        })
-        .UseSerilog((context, services, configuration) =>
-        {
-            var settings = context.Configuration.GetSection("TemperatureAppSettings").Get<TemperatureAppSettings>();
-            if (settings != null)
+            configuration
+                .ReadFrom.Configuration(context.Configuration)
+                .WriteTo.Console();
+
+            if (!string.IsNullOrWhiteSpace(appSettings.OtlpEndpoint))
             {
-                configuration
-                    .ReadFrom.Configuration(context.Configuration)
-                    .WriteTo.Console()
-                    .WriteTo.GrafanaLoki(settings.LokiUrl, labels: new[]
+                configuration.WriteTo.OpenTelemetry(o =>
+                {
+                    o.Endpoint = appSettings.OtlpEndpoint;
+                    o.Protocol = OtlpProtocol.Grpc;
+                    o.ResourceAttributes = new Dictionary<string, object>
                     {
-                    new LokiLabel { Key = "app", Value = "TemperatureSensorArduinoReader" }
-                    });
+                        ["service.name"] = "TemperatureSensorArduinoReader"
+                    };
+                });
             }
-        })
-        .ConfigureServices((hostContext, services) =>
-        {
-            services.Configure<TemperatureAppSettings>(hostContext.Configuration.GetSection("TemperatureAppSettings"));
+        }
+    });
 
-            var connectionString = hostContext.Configuration.GetSection("TemperatureAppSettings").GetValue<string>("ConnectionString");
-            services.AddDbContext<AppDbContext>(options =>
-                options.UseNpgsql(connectionString));
+    if (!string.IsNullOrWhiteSpace(appSettings?.HealthUrl))
+    {
+        builder.WebHost.UseUrls(appSettings.HealthUrl);
+    }
 
-            services.AddScoped<RoomRepository>();
-            services.AddSingleton<RabbitService>();
-            services.AddScoped<SensorService>();
-            services.AddScoped<SensorRepository>();
-            services.AddScoped<SensorPipeline>();
-            services.AddSingleton<TopicDispatcher>();
-            services.AddSingleton<TX07K_TXC_Resolver>();
-            services.AddSingleton<GarageResolver>();
-            services.AddKeyedScoped<ITopicStrategy, HomeAssistantOnlineStrategy>(MqttTopics.HomeAssistantStatus);
-            services.AddKeyedScoped<ITopicStrategy, HeaterOutTempStrategy>(MqttTopics.HeaterOutTemp);
-            services.AddKeyedScoped<ITopicStrategy, GarageTemperatureStrategy>(MqttTopics.GarageTemperature);
-            services.AddHostedService<Worker>();
-            services.AddScoped<RoomService>();
-            services.AddHostedService<HomeAssistantService>();
-        })
-        .Build()
-        .MigrateAndRun();
+    builder.Services.Configure<TemperatureAppSettings>(builder.Configuration.GetSection("TemperatureAppSettings"));
+
+    builder.Services.AddMetrics();
+    builder.Services.AddSingleton<SensorMetrics>();
+
+    if (!string.IsNullOrWhiteSpace(appSettings?.OtlpEndpoint))
+    {
+        builder.Services.AddOpenTelemetry()
+            .ConfigureResource(r => r.AddService("TemperatureSensorArduinoReader"))
+            .WithMetrics(m => m
+                .AddMeter(SensorMetrics.MeterName)
+                .AddMeter("Npgsql")
+                .AddRuntimeInstrumentation()
+                .AddOtlpExporter(o => o.Endpoint = new Uri(appSettings.OtlpEndpoint)));
+    }
+
+    var connectionString = builder.Configuration.GetSection("TemperatureAppSettings").GetValue<string>("ConnectionString");
+    builder.Services.AddDbContext<AppDbContext>(options =>
+        options.UseNpgsql(connectionString));
+
+    builder.Services.AddScoped<RoomRepository>();
+    builder.Services.AddSingleton<RabbitService>();
+    builder.Services.AddScoped<SensorService>();
+    builder.Services.AddScoped<SensorRepository>();
+    builder.Services.AddScoped<SensorPipeline>();
+    builder.Services.AddSingleton<TopicDispatcher>();
+    builder.Services.AddSingleton<TX07KTXCResolver>();
+    builder.Services.AddSingleton<GarageResolver>();
+    builder.Services.AddKeyedScoped<ITopicStrategy, HomeAssistantOnlineStrategy>(MqttTopics.HomeAssistantStatus);
+    builder.Services.AddKeyedScoped<ITopicStrategy, HeaterOutTempStrategy>(MqttTopics.HeaterOutTemp);
+    builder.Services.AddKeyedScoped<ITopicStrategy, GarageTemperatureStrategy>(MqttTopics.GarageTemperature);
+    builder.Services.AddHostedService<Worker>();
+    builder.Services.AddScoped<RoomService>();
+    builder.Services.AddHostedService<HomeAssistantService>();
+
+    builder.Services.AddHealthChecks()
+        .AddNpgSql(
+            connectionString: connectionString!,
+            name: "postgres-asr",
+            tags: new[] { "ready" });
+
+    var app = builder.Build();
+
+    using (var scope = app.Services.CreateScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Database.MigrateAsync();
+    }
+
+    app.MapHealthChecks("/health/live", new HealthCheckOptions
+    {
+        Predicate = _ => false,
+        ResponseWriter = WriteHealthResponse
+    });
+
+    app.MapHealthChecks("/health/ready", new HealthCheckOptions
+    {
+        Predicate = r => r.Tags.Contains("ready"),
+        ResponseWriter = WriteHealthResponse
+    });
+
+    await app.RunAsync();
 }
 catch (Exception ex)
 {
-    File.WriteAllText("startup_error.txt", ex.ToString());
+    await File.WriteAllTextAsync("startup_error.txt", ex.ToString());
     throw;
 }
 
-public static class HostExtensions
+static Task WriteHealthResponse(HttpContext context, HealthReport report)
 {
-    public static void MigrateAndRun(this IHost host)
+    context.Response.ContentType = "application/json";
+    var payload = new
     {
-        using (var scope = host.Services.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            db.Database.Migrate();
-        }
-        host.Run();
-    }
+        status = report.Status.ToString(),
+        totalDuration = report.TotalDuration.ToString(),
+        entries = report.Entries.ToDictionary(
+            e => e.Key,
+            e => new
+            {
+                data = e.Value.Data,
+                description = e.Value.Description,
+                duration = e.Value.Duration.ToString(),
+                status = e.Value.Status.ToString(),
+                tags = e.Value.Tags
+            })
+    };
+    return context.Response.WriteAsync(JsonSerializer.Serialize(payload));
 }

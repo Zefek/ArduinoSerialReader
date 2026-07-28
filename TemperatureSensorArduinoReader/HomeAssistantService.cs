@@ -13,7 +13,6 @@ public class HomeAssistantService : BackgroundService
     private ClientWebSocket? clientWebSocket = null;
     private readonly IServiceProvider serviceProvider;
     private readonly IOptions<TemperatureAppSettings> options;
-    private readonly RabbitService rabbitService;
     private readonly ILogger<HomeAssistantService> logger;
     private static readonly Random random = new();
     private int messageId = 2;
@@ -21,11 +20,10 @@ public class HomeAssistantService : BackgroundService
     private DateTime? lastConnectionTry = null;
     private TimeSpan connectionTimeout = TimeSpan.Zero;
 
-    public HomeAssistantService(IServiceProvider serviceProvider, IOptions<TemperatureAppSettings> options, RabbitService rabbitService, ILogger<HomeAssistantService> logger)
+    public HomeAssistantService(IServiceProvider serviceProvider, IOptions<TemperatureAppSettings> options, ILogger<HomeAssistantService> logger)
     {
         this.serviceProvider = serviceProvider;
         this.options = options;
-        this.rabbitService = rabbitService;
         this.logger = logger;
     }
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -43,33 +41,46 @@ public class HomeAssistantService : BackgroundService
             var message = await ReceiveMessage(stoppingToken);
             if (message != null)
             {
-                if (message.type == "event" && message.@event.event_type == "device_registry_updated" && message.@event.data.action == "update")
-                {
-                    var deviceId = message.@event.data.device_id.ToString();
-                    await SendMessage(new
-                    {
-                        id = messageId++,
-                        type = "config/device_registry/list"
-                    }, stoppingToken);
-                    var devices = await ReceiveMessage(stoppingToken);
-                    using var scope = serviceProvider.CreateScope();
-                    var roomService = scope.ServiceProvider.GetService<RoomService>();
-                    if (devices?.result != null)
-                    {
-                        foreach (var device in devices.result)
-                        {
-                            if (device.id == deviceId && device.name.ToString().StartsWith("TX07K-TXC/") && !string.IsNullOrEmpty(device.area_id.ToString()))
-                            {
-                                var sensorName = device.name.ToString().Substring("TX07K-TXC/".Length, device.name.ToString().Length - "TX07K-TXC/".Length);
-                                await roomService!.AddOrUpdateRoom(device.area_id.ToString(), sensorName, stoppingToken);
-                            }
-                        }
-                    }
-                }
+                await ProcessMessage(message, stoppingToken);
             }
-            // Keep the service running
             await Task.Delay(10, stoppingToken);
         }
+    }
+
+    private async Task ProcessMessage(dynamic message, CancellationToken stoppingToken)
+    {
+        if (message.type != "event" || message.@event.event_type != "device_registry_updated" || message.@event.data.action != "update")
+        {
+            return;
+        }
+        string deviceId = message.@event.data.device_id.ToString();
+        await SendMessage(new
+        {
+            id = messageId++,
+            type = "config/device_registry/list"
+        }, stoppingToken);
+        var devices = await ReceiveMessage(stoppingToken);
+        if (devices?.result == null)
+        {
+            return;
+        }
+        using var scope = serviceProvider.CreateScope();
+        var roomService = scope.ServiceProvider.GetService<RoomService>();
+        foreach (var device in devices.result)
+        {
+            await UpdateRoom(roomService, device, deviceId, stoppingToken);
+        }
+    }
+
+    private async Task UpdateRoom(RoomService? roomService, dynamic device, string deviceId, CancellationToken stoppingToken)
+    {
+        const string devicePrefix = "TX07K-TXC/";
+        if (device.id != deviceId || !device.name.ToString().StartsWith(devicePrefix) || string.IsNullOrEmpty(device.area_id.ToString()))
+        {
+            return;
+        }
+        var sensorName = device.name.ToString().Substring(devicePrefix.Length, device.name.ToString().Length - devicePrefix.Length);
+        await roomService!.AddOrUpdateRoom(device.area_id.ToString(), sensorName, stoppingToken);
     }
 
     private async Task Connect(CancellationToken stoppingToken)
@@ -80,11 +91,11 @@ public class HomeAssistantService : BackgroundService
         }
         try
         {
-            logger.LogInformation("Connecting to Home Assistant WebSocket...");
+            logger.LogDebug("Connecting to Home Assistant WebSocket...");
             clientWebSocket = new ClientWebSocket();
             clientWebSocket.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
             await clientWebSocket.ConnectAsync(new Uri(options.Value.HomeAssistantWebSocket), stoppingToken);
-            var resultAuthRequired = await ReceiveMessage(stoppingToken, force: true);
+            await ReceiveMessage(stoppingToken, force: true);
             await SendMessage(new { type = "auth", access_token = options.Value.HomeAssistantToken }, stoppingToken, force: true);
             var resultOk = await ReceiveMessage(stoppingToken, force: true);
             if (resultOk?.type == null)
@@ -95,21 +106,21 @@ public class HomeAssistantService : BackgroundService
             if (resultOk.type != "auth_ok")
             {
                 string message = JsonConvert.SerializeObject(resultOk);
-                logger.LogError("Error authenticating to Home Assistant WebSocket {message}", message);
+                logger.LogError("Error authenticating to Home Assistant WebSocket {Message}", message);
                 lastConnectionTry = DateTime.Now;
                 connectionTimeout = TimeSpan.FromMilliseconds(Math.Min((connectionTimeout * 2 + TimeSpan.FromSeconds(random.Next(5))).TotalMilliseconds, TimeSpan.FromMinutes(5).TotalMilliseconds));
                 clientWebSocket.Dispose();
                 clientWebSocket = null;
                 return;
             }
-            logger.LogInformation("Authenticated to Home Assistant WebSocket");
+            logger.LogDebug("Authenticated to Home Assistant WebSocket");
             await SendMessage(new
             {
                 id = 1,
                 type = "subscribe_events",
                 event_type = "device_registry_updated"
             }, stoppingToken, force: true);
-            logger.LogInformation("Subscribed to device_registry_updated events");
+            logger.LogDebug("Subscribed to device_registry_updated events");
             lastConnectionTry = null;
             connectionTimeout = TimeSpan.Zero;
             connected = true;
@@ -127,7 +138,7 @@ public class HomeAssistantService : BackgroundService
 
     private async Task SendMessage(object value, CancellationToken cancellationToken, bool force = false)
     {
-        logger.LogDebug("Sending message to Home Assistant: {message}", System.Text.Json.JsonSerializer.Serialize(value));
+        logger.LogDebug("Sending message to Home Assistant: {Message}", System.Text.Json.JsonSerializer.Serialize(value));
         if (connected || force)
         {
             try
@@ -169,7 +180,7 @@ public class HomeAssistantService : BackgroundService
                         sb.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
                     }
                 } while (!endOfMessage);
-                logger.LogDebug("Message received from Home Assistant: {message}", sb.ToString());
+                logger.LogDebug("Message received from Home Assistant: {Message}", sb.ToString());
                 return JsonConvert.DeserializeObject(sb.ToString());
             }
             catch (Exception ex)

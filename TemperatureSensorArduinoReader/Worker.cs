@@ -15,10 +15,10 @@ internal class Worker : BackgroundService
     private readonly IOptions<TemperatureAppSettings> options;
     private readonly ILogger<Worker> logger;
     private readonly IServiceProvider serviceProvider;
-    private readonly TX07K_TXC_Resolver resolver;
+    private readonly TX07KTXCResolver resolver;
     private CancellationToken cancellationToken;
 
-    public Worker(IOptions<TemperatureAppSettings> options, ILogger<Worker> logger, IServiceProvider serviceProvider, TX07K_TXC_Resolver resolver)
+    public Worker(IOptions<TemperatureAppSettings> options, ILogger<Worker> logger, IServiceProvider serviceProvider, TX07KTXCResolver resolver)
     {
         this.options = options;
         this.logger = logger;
@@ -29,7 +29,7 @@ internal class Worker : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         cancellationToken = stoppingToken;
-        logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
+        logger.LogInformation("Worker running at: {Time}", DateTimeOffset.Now);
 
         using var scope = serviceProvider.CreateScope();
         var sensorService = scope.ServiceProvider.GetService<SensorService>();
@@ -46,7 +46,7 @@ internal class Worker : BackgroundService
 
     private async void Sp_DataReceived(object sender, SerialDataReceivedEventArgs e)
     {
-        logger.LogInformation("Data received at: {time}", DateTimeOffset.Now);
+        logger.LogInformation("Data received at: {Time}", DateTimeOffset.Now);
         Thread.Sleep(1000);
         var buffer = new byte[serialPort!.BytesToRead];
         serialPort.Read(buffer, 0, serialPort.BytesToRead);
@@ -71,7 +71,7 @@ internal class Worker : BackgroundService
                     {
                         sb.Append(string.Format("{0:X2}", d));
                     }
-                    logger.LogInformation("Data received: {data}", sb.ToString());
+                    logger.LogInformation("Data received: {Data}", sb.ToString());
                     using var scope = serviceProvider.CreateScope();
                     var sensorPipeline = scope.ServiceProvider.GetService<SensorPipeline>();
                     var payload = new ReadOnlySequence<byte>(data.ToArray(), 0, data.Count);
@@ -89,7 +89,7 @@ internal class Worker : BackgroundService
 
     public override Task StopAsync(CancellationToken cancellationToken)
     {
-        logger.LogInformation("Worker stopping at: {time}", DateTimeOffset.Now);
+        logger.LogInformation("Worker stopping at: {Time}", DateTimeOffset.Now);
         if (serialPort != null && serialPort.IsOpen)
         {
             serialPort.Close();
