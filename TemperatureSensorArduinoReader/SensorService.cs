@@ -11,12 +11,14 @@ namespace TemperatureSensorArduinoReader
         private readonly RoomRepository roomRepository;
         private readonly RabbitService rabbitService;
         private readonly ILogger<SensorService> logger;
+        private readonly SensorMetrics metrics;
 
-        public SensorService(RoomRepository roomRepository, RabbitService rabbitService, ILogger<SensorService> logger)
+        public SensorService(RoomRepository roomRepository, RabbitService rabbitService, SensorMetrics metrics, ILogger<SensorService> logger)
         {
             this.roomRepository = roomRepository;
             this.rabbitService = rabbitService;
             this.logger = logger;
+            this.metrics = metrics;
         }
 
         private async Task SendSensorDiscovery(string sensorName, CancellationToken cancellationToken)
@@ -80,9 +82,9 @@ namespace TemperatureSensorArduinoReader
                 humidityTrend = Math.Round(sensor.HumidityTrend, 1),
                 windowOpen = sensor.WindowOpen && (room?.HasWindow ?? false) ? "ON" : "OFF"
             });
-
             logger.LogInformation("Publishing data for sensor {Sensor} to topic TX07KTXC/{Topic}/state: {Data}", sensor.Name, topic, body);
             await rabbitService.Publish(body, "TX07KTXC/" + topic + "/state", cancellationToken);
+            metrics.RecordReading(sensor, room?.Name ?? sensor.Name);
         }
     }
 }

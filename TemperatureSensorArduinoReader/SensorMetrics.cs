@@ -71,9 +71,9 @@ public class SensorMetrics
         }
     }
 
-    internal void RecordReading(Sensor sensor)
+    internal void RecordReading(Sensor sensor, string name)
     {
-        sensors[sensor.Name] = new Snapshot(
+        sensors[name] = new Snapshot(
             sensor.Temperature,
             sensor.Humidity,
             sensor.AbsoluteHumidity,
@@ -84,7 +84,7 @@ public class SensorMetrics
             sensor.AbsoluteHumidityEmaValue,
             sensor.WindowOpen,
             sensor.BatteryLow);
-        readingsProcessed.Add(1, new KeyValuePair<string, object?>("sensor", sensor.Name));
+        readingsProcessed.Add(1, new KeyValuePair<string, object?>("sensor", name));
     }
 
     public void RecordReadingError() => readingErrors.Add(1);

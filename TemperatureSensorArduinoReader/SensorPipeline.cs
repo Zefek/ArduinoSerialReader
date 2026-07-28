@@ -37,7 +37,6 @@ internal class SensorPipeline
             await sensorRepository.SaveState(existingSensor);
             await sensorRepository.SaveReading(existingSensor);
             await sensorService.PublishSensorData(existingSensor, cancellationToken);
-            metrics.RecordReading(existingSensor);
         }
         catch (Exception ex)
         {
