@@ -138,17 +138,31 @@
     },
     {
       "id": 10,
-      "type": "timeseries",
-      "title": "Čtení za sekundu podle senzoru",
+      "type": "barchart",
+      "title": "Počet odeslání podle senzoru (za zvolené období)",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 16, "x": 0, "y": 5 },
-      "description": "rate(asr.readings.processed) na senzor. Řada spadlá na nulu = senzor přestal vysílat.",
+      "description": "increase(asr.readings.processed) na senzor za celý zvolený časový rozsah. Sloupec = kolik čtení daný senzor za období odeslal. Nulový / chybějící sloupec = senzor v tom období mlčel.",
       "fieldConfig": {
-        "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 15, "spanNulls": false } },
-        "overrides": []
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "custom": { "fillOpacity": 80, "lineWidth": 1, "gradientMode": "none", "axisLabel": "Počet odeslání" }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Value" }, "properties": [ { "id": "displayName", "value": "Počet odeslání" } ] }
+        ]
       },
-      "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "sum"] } },
-      "targets": [ { "refId": "A", "expr": "sum by (sensor) (rate(asr_readings_processed_total{sensor=~\"$sensor\"}[$__rate_interval]))", "legendFormat": "{{sensor}}" } ]
+      "options": {
+        "orientation": "auto",
+        "xField": "sensor",
+        "showValue": "auto",
+        "stacking": "none",
+        "legend": { "showLegend": false },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [ { "refId": "A", "format": "table", "instant": true, "expr": "sum by (sensor) (increase(asr_readings_processed_total{sensor=~\"$sensor\"}[$__range]))", "legendFormat": "{{sensor}}" } ],
+      "transformations": [ { "id": "sortBy", "options": { "fields": {}, "sort": [ { "field": "Value", "desc": true } ] } } ]
     },
     {
       "id": 11,
