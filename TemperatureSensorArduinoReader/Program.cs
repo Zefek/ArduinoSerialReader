@@ -7,8 +7,15 @@ using OpenTelemetry.Resources;
 using Serilog;
 using Serilog.Sinks.OpenTelemetry;
 using TemperatureSensorArduinoReader;
+using TemperatureSensorArduinoReader.Climate;
 using TemperatureSensorArduinoReader.Resolvers;
 using TemperatureSensorArduinoReader.TopicStrategies;
+
+if (args.Length > 0 && args[0] == "climate")
+{
+    Environment.ExitCode = await new ClimateCli().Run(args[1..]);
+    return;
+}
 
 try
 {
@@ -82,6 +89,17 @@ try
     builder.Services.AddHostedService<Worker>();
     builder.Services.AddScoped<RoomService>();
     builder.Services.AddHostedService<HomeAssistantService>();
+
+    var climateOptions = builder.Configuration.GetSection("Climate").Get<ClimateOptions>() ?? new ClimateOptions();
+    if (climateOptions.Enabled)
+    {
+        builder.Services.AddSingleton(new ClimateSettings(climateOptions));
+        builder.Services.AddSingleton<ClimateCommentWriter>();
+        builder.Services.AddSingleton<ClimatePublisher>();
+        builder.Services.AddScoped<ClimateRepository>();
+        builder.Services.AddScoped<ClimateReportRunner>();
+        builder.Services.AddHostedService<ClimateReportService>();
+    }
 
     builder.Services.AddHealthChecks()
         .AddNpgSql(
