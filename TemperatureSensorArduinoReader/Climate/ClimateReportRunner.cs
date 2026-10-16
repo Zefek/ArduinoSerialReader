@@ -31,34 +31,7 @@ class ClimateReportRunner
         {
             try
             {
-                var builder = new ClimateReportBuilder(settings, repository, day);
-                var facts = await builder.Build();
-                var last = day == days[^1];
-                if (run.Comments && settings.Options.Comment.Enabled && last)
-                {
-                    builder.Comment = await commentWriter.Write(facts);
-                    facts["comment"] = builder.Comment.Text;
-                    facts["comment_source"] = builder.Comment.Model;
-                    facts["comment_attempts"] = new JsonArray(builder.Comment.Attempts.Select(a => (JsonNode)a).ToArray());
-                    logger.LogInformation("Climate comment {Day} from {Model} ({TokensIn}/{TokensOut} tokens): {Comment}", day, builder.Comment.Model, builder.Comment.TokensIn, builder.Comment.TokensOut, builder.Comment.Text);
-                    if (builder.Comment.Attempts.Any(a => !a.EndsWith(": ok", StringComparison.Ordinal)))
-                    {
-                        logger.LogWarning("Climate comment attempts {Day}: {Attempts}", day, string.Join(" | ", builder.Comment.Attempts));
-                    }
-                }
-                if (run.OutputFile != null)
-                {
-                    await File.WriteAllTextAsync(run.OutputFile, facts.ToJsonString(jsonOptions), cancellationToken);
-                }
-                if (!run.DryRun)
-                {
-                    await repository.Save(day, builder);
-                    if (last && publisher != null && settings.Options.HomeAssistant.Publish)
-                    {
-                        await publisher.Publish(builder, cancellationToken);
-                    }
-                }
-                logger.LogInformation("Climate report {Day}: {Status}, {Highlights} highlights, {Metrics} metrics", day, builder.Status, builder.Highlights.Count, builder.Metrics.Count);
+                await RunDay(day, day == days[^1], run, cancellationToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -67,5 +40,42 @@ class ClimateReportRunner
             }
         }
         return ok;
+    }
+
+    async Task RunDay(DateOnly day, bool last, ClimateRunOptions run, CancellationToken cancellationToken)
+    {
+        var builder = new ClimateReportBuilder(settings, repository, day);
+        var facts = await builder.Build();
+        if (run.Comments && settings.Options.Comment.Enabled && last)
+        {
+            await AddComment(day, builder, facts);
+        }
+        if (run.OutputFile != null)
+        {
+            await File.WriteAllTextAsync(run.OutputFile, facts.ToJsonString(jsonOptions), cancellationToken);
+        }
+        if (!run.DryRun)
+        {
+            await repository.Save(day, builder);
+            if (last && publisher != null && settings.Options.HomeAssistant.Publish)
+            {
+                await publisher.Publish(builder, cancellationToken);
+            }
+        }
+        logger.LogInformation("Climate report {Day}: {Status}, {Highlights} highlights, {Metrics} metrics", day, builder.Status, builder.Highlights.Count, builder.Metrics.Count);
+    }
+
+    async Task AddComment(DateOnly day, ClimateReportBuilder builder, JsonObject facts)
+    {
+        var comment = await commentWriter.Write(facts);
+        builder.Comment = comment;
+        facts["comment"] = comment.Text;
+        facts["comment_source"] = comment.Model;
+        facts["comment_attempts"] = new JsonArray(comment.Attempts.Select(a => (JsonNode)a).ToArray());
+        logger.LogInformation("Climate comment {Day} from {Model} ({TokensIn}/{TokensOut} tokens): {Comment}", day, comment.Model, comment.TokensIn, comment.TokensOut, comment.Text);
+        if (comment.Attempts.Any(a => !a.EndsWith(": ok", StringComparison.Ordinal)))
+        {
+            logger.LogWarning("Climate comment attempts {Day}: {Attempts}", day, string.Join(" | ", comment.Attempts));
+        }
     }
 }

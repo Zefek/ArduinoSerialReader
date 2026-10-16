@@ -11,24 +11,32 @@ record ClimateComment(string Text, string Model, int? TokensIn, int? TokensOut, 
 
 class ClimateCommentWriter
 {
+    const string TrendKey = "trend";
+    const string RoomSingular = "místnosti";
+    const string RoomAccusative = "místnost";
+    const string RoomLocativePlural = "místnostech";
+    const string RoomGenitivePlural = "místností";
+    const string RoomDativePlural = "místnostem";
+
     readonly ClimateSettings settings;
     readonly HttpClient http;
+    readonly TimeSpan regexTimeout = TimeSpan.FromSeconds(1);
     readonly JsonSerializerOptions jsonOptions = new() { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     readonly Dictionary<string, string> roomTrendNames = new()
     {
-        ["surface_hours_80"] = "riziko_plisne_hodin",
-        ["rh_avg"] = "vlhkost_prumer_pct",
-        ["ah_excess"] = "vlhkost_nad_venkovni_g_m3",
-        ["vent_efficiency_pct"] = "ucinnost_vetrani_pct",
-        ["t_avg"] = "teplota_prumer",
-        ["night_rate"] = "nocni_chladnuti_c_za_h",
+        [ClimateReportBuilder.SurfaceHours80] = "riziko_plisne_hodin",
+        [ClimateReportBuilder.RhAvg] = "vlhkost_prumer_pct",
+        [ClimateReportBuilder.AhExcess] = "vlhkost_nad_venkovni_g_m3",
+        [ClimateReportBuilder.VentEfficiency] = "ucinnost_vetrani_pct",
+        [ClimateReportBuilder.TAvg] = "teplota_prumer",
+        [ClimateReportBuilder.NightRate] = "nocni_chladnuti_c_za_h",
     };
 
     readonly Dictionary<string, string> outsideTrendNames = new()
     {
-        ["t_avg"] = "teplota_prumer",
-        ["ah_avg"] = "absolutni_g_m3",
+        [ClimateReportBuilder.TAvg] = "teplota_prumer",
+        [ClimateReportBuilder.AhAvg] = "absolutni_g_m3",
     };
 
     public ClimateCommentWriter(ClimateSettings settings)
@@ -140,12 +148,12 @@ class ClimateCommentWriter
         {
             return "prilis dlouha odpoved";
         }
-        if (!Regex.IsMatch(text, @"\*\*[^*\r\n]+:\*\*"))
+        if (!Regex.IsMatch(text, @"\*\*[^*\r\n]+:\*\*", RegexOptions.None, regexTimeout))
         {
             return "chybi format **kod:**";
         }
         var known = codes.Values.ToHashSet();
-        var unknown = Regex.Matches(text, @"\bM\d+\b").Select(m => m.Value).Where(c => !known.Contains(c)).Distinct().ToList();
+        var unknown = Regex.Matches(text, @"\bM\d+\b", RegexOptions.None, regexTimeout).Select(m => m.Value).Where(c => !known.Contains(c)).Distinct().ToList();
         if (unknown.Count > 0)
         {
             return $"nezname kody {string.Join(", ", unknown)}";
@@ -155,7 +163,7 @@ class ClimateCommentWriter
         {
             var stem = Normalize(DisplayName(room));
             stem = stem.Length > 5 ? stem[..5] : stem;
-            if (Regex.IsMatch(normalized, $@"\b{Regex.Escape(stem)}"))
+            if (Regex.IsMatch(normalized, $@"\b{Regex.Escape(stem)}", RegexOptions.None, regexTimeout))
             {
                 return $"obsahuje nazev mistnosti ({DisplayName(room)})";
             }
@@ -165,19 +173,19 @@ class ClimateCommentWriter
 
     readonly Dictionary<string, (string Singular, string Plural)> prepositionForms = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["v"] = ("místnosti", "místnostech"),
-        ["ve"] = ("místnosti", "místnostech"),
-        ["na"] = ("místnosti", "místnostech"),
-        ["o"] = ("místnosti", "místnostech"),
-        ["u"] = ("místnosti", "místností"),
-        ["z"] = ("místnosti", "místností"),
-        ["ze"] = ("místnosti", "místností"),
-        ["do"] = ("místnosti", "místností"),
-        ["od"] = ("místnosti", "místností"),
-        ["k"] = ("místnosti", "místnostem"),
-        ["ke"] = ("místnosti", "místnostem"),
-        ["pro"] = ("místnost", "místnosti"),
-        ["za"] = ("místnost", "místnosti"),
+        ["v"] = (RoomSingular, RoomLocativePlural),
+        ["ve"] = (RoomSingular, RoomLocativePlural),
+        ["na"] = (RoomSingular, RoomLocativePlural),
+        ["o"] = (RoomSingular, RoomLocativePlural),
+        ["u"] = (RoomSingular, RoomGenitivePlural),
+        ["z"] = (RoomSingular, RoomGenitivePlural),
+        ["ze"] = (RoomSingular, RoomGenitivePlural),
+        ["do"] = (RoomSingular, RoomGenitivePlural),
+        ["od"] = (RoomSingular, RoomGenitivePlural),
+        ["k"] = (RoomSingular, RoomDativePlural),
+        ["ke"] = (RoomSingular, RoomDativePlural),
+        ["pro"] = (RoomAccusative, RoomSingular),
+        ["za"] = (RoomAccusative, RoomSingular),
     };
 
     string Restore(string text, Dictionary<string, string> codes)
@@ -188,12 +196,12 @@ class ClimateCommentWriter
             {
                 return m.Value;
             }
-            var plural = Regex.Matches(m.Groups["codes"].Value, @"M\d+").Count > 1;
+            var plural = Regex.Matches(m.Groups["codes"].Value, @"M\d+", RegexOptions.None, regexTimeout).Count > 1;
             return $"{m.Groups["prep"].Value} {(plural ? forms.Plural : forms.Singular)} {m.Groups["codes"].Value}";
-        });
+        }, RegexOptions.None, regexTimeout);
         foreach (var (room, code) in codes.OrderByDescending(c => c.Value.Length))
         {
-            text = Regex.Replace(text, $@"\b{Regex.Escape(code)}\b", DisplayName(room));
+            text = Regex.Replace(text, $@"\b{Regex.Escape(code)}\b", DisplayName(room), RegexOptions.None, regexTimeout);
         }
         return text;
     }
@@ -233,8 +241,8 @@ class ClimateCommentWriter
                     ["hodin_nad_60"] = C(h?["hours_60"]),
                     ["hodin_nad_70"] = C(h?["hours_70"]),
                     ["hodin_pod_35"] = C(h?["hours_below_35"]),
-                    ["absolutni_g_m3"] = C(h?["ah_avg"]),
-                    ["nad_venkovni_g_m3"] = C(h?["ah_excess"]),
+                    ["absolutni_g_m3"] = C(h?[ClimateReportBuilder.AhAvg]),
+                    ["nad_venkovni_g_m3"] = C(h?[ClimateReportBuilder.AhExcess]),
                 },
             };
             if (s != null)
@@ -271,9 +279,9 @@ class ClimateCommentWriter
             {
                 room["pokryti_dat_pct"] = coverage;
             }
-            if (TranslateTrend(r["trend"], roomTrendNames) is JsonObject trend)
+            if (TranslateTrend(r[TrendKey], roomTrendNames) is JsonObject trend)
             {
-                room["trend"] = trend;
+                room[TrendKey] = trend;
             }
             rooms.Add(room);
         }
@@ -283,12 +291,12 @@ class ClimateCommentWriter
             ["den"] = C(facts["day"]),
             ["venku"] = o == null ? null : new JsonObject
             {
-                ["teplota_prumer"] = C(o["t_avg"]),
+                ["teplota_prumer"] = C(o[ClimateReportBuilder.TAvg]),
                 ["teplota_min"] = C(o["t_min"]),
                 ["teplota_max"] = C(o["t_max"]),
                 ["vlhkost_prumer_pct"] = C(o["rh_avg"]),
-                ["absolutni_g_m3"] = C(o["ah_avg"]),
-                ["trend"] = TranslateTrend(o["trend"], outsideTrendNames),
+                ["absolutni_g_m3"] = C(o[ClimateReportBuilder.AhAvg]),
+                [TrendKey] = TranslateTrend(o[TrendKey], outsideTrendNames),
             },
             ["upozorneni"] = new JsonArray(facts["highlights"]!.AsArray()
                 .Where(x => codes.ContainsKey(x!["room"]!.GetValue<string>()))

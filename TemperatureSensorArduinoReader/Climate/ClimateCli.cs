@@ -16,30 +16,31 @@ class ClimateCli
         var comments = true;
         string? output = null;
         string? factsFile = null;
-        for (var i = 0; i < args.Length; i++)
+        var queue = new Queue<string>(args);
+        while (queue.TryDequeue(out var arg))
         {
-            switch (args[i])
+            switch (arg)
             {
                 case "--day":
-                    day = DateOnly.ParseExact(args[++i], "yyyy-MM-dd", CultureInfo.InvariantCulture);
+                    day = DateOnly.ParseExact(queue.Dequeue(), "yyyy-MM-dd", CultureInfo.InvariantCulture);
                     break;
                 case "--backfill":
-                    backfill = int.Parse(args[++i], CultureInfo.InvariantCulture);
+                    backfill = int.Parse(queue.Dequeue(), CultureInfo.InvariantCulture);
                     break;
                 case "--dry-run":
                     dryRun = true;
                     break;
                 case "--out":
-                    output = args[++i];
+                    output = queue.Dequeue();
                     break;
                 case "--no-comment":
                     comments = false;
                     break;
                 case "--facts":
-                    factsFile = args[++i];
+                    factsFile = queue.Dequeue();
                     break;
                 default:
-                    Console.Error.WriteLine($"Neznamy parametr {args[i]}. Pouziti: climate [--day yyyy-MM-dd] [--backfill N] [--dry-run] [--out soubor.json] [--no-comment] [--facts fakta.json]");
+                    await Console.Error.WriteLineAsync($"Neznamy parametr {arg}. Pouziti: climate [--day yyyy-MM-dd] [--backfill N] [--dry-run] [--out soubor.json] [--no-comment] [--facts fakta.json]");
                     return 2;
             }
         }
@@ -59,8 +60,8 @@ class ClimateCli
         {
             var facts = JsonNode.Parse(await File.ReadAllTextAsync(factsFile))!.AsObject();
             var comment = await commentWriter.Write(facts);
-            Console.WriteLine(comment.Text);
-            Console.Error.WriteLine($"--- {comment.Model}, {comment.TokensIn}/{comment.TokensOut} tokenu; pokusy: {string.Join(" | ", comment.Attempts)}");
+            await Console.Out.WriteLineAsync(comment.Text);
+            await Console.Error.WriteLineAsync($"--- {comment.Model}, {comment.TokensIn}/{comment.TokensOut} tokenu; pokusy: {string.Join(" | ", comment.Attempts)}");
             return 0;
         }
         var days = new List<DateOnly>();
@@ -88,7 +89,7 @@ class ClimateCli
         else if ((await db.Database.GetPendingMigrationsAsync()).Any())
         {
             repository.UseHistory = false;
-            Console.Error.WriteLine("Databaze nema vsechny migrace, trend se nepocita.");
+            await Console.Error.WriteLineAsync("Databaze nema vsechny migrace, trend se nepocita.");
         }
         using var loggerFactory = LoggerFactory.Create(b => b.AddSimpleConsole(o => o.SingleLine = true));
         var runner = new ClimateReportRunner(settings, repository, commentWriter, loggerFactory.CreateLogger<ClimateReportRunner>());
