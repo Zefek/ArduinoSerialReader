@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
@@ -7,8 +8,17 @@ using OpenTelemetry.Resources;
 using Serilog;
 using Serilog.Sinks.OpenTelemetry;
 using TemperatureSensorArduinoReader;
+using TemperatureSensorArduinoReader.Climate;
 using TemperatureSensorArduinoReader.Resolvers;
 using TemperatureSensorArduinoReader.TopicStrategies;
+
+if (args.Length > 0 && args[0] == "climate")
+{
+    Environment.ExitCode = await new ClimateCli().Run(args[1..]);
+    return;
+}
+
+var serviceVersion = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
 
 try
 {
@@ -36,7 +46,8 @@ try
                     o.Protocol = OtlpProtocol.Grpc;
                     o.ResourceAttributes = new Dictionary<string, object>
                     {
-                        ["service.name"] = "TemperatureSensorArduinoReader"
+                        ["service.name"] = "TemperatureSensorArduinoReader",
+                        ["service.version"] = serviceVersion
                     };
                 });
             }
@@ -56,7 +67,7 @@ try
     if (!string.IsNullOrWhiteSpace(appSettings?.OtlpEndpoint))
     {
         builder.Services.AddOpenTelemetry()
-            .ConfigureResource(r => r.AddService("TemperatureSensorArduinoReader"))
+            .ConfigureResource(r => r.AddService("TemperatureSensorArduinoReader", serviceVersion: serviceVersion))
             .WithMetrics(m => m
                 .AddMeter(SensorMetrics.MeterName)
                 .AddMeter("Npgsql")
@@ -82,6 +93,17 @@ try
     builder.Services.AddHostedService<Worker>();
     builder.Services.AddScoped<RoomService>();
     builder.Services.AddHostedService<HomeAssistantService>();
+
+    var climateOptions = builder.Configuration.GetSection("Climate").Get<ClimateOptions>() ?? new ClimateOptions();
+    if (climateOptions.Enabled)
+    {
+        builder.Services.AddSingleton(new ClimateSettings(climateOptions));
+        builder.Services.AddSingleton<ClimateCommentWriter>();
+        builder.Services.AddSingleton<ClimatePublisher>();
+        builder.Services.AddScoped<ClimateRepository>();
+        builder.Services.AddScoped<ClimateReportRunner>();
+        builder.Services.AddHostedService<ClimateReportService>();
+    }
 
     builder.Services.AddHealthChecks()
         .AddNpgSql(

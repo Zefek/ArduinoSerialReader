@@ -168,6 +168,34 @@ namespace TemperatureSensorArduinoReader
             }
         }
 
+        public async Task PublishRetained(string payload, string topic, CancellationToken cancellationToken)
+        {
+            if (managedMqttClientPublisher != null && !managedMqttClientPublisher.IsConnected)
+            {
+                await Connect(cancellationToken);
+            }
+            if (managedMqttClientPublisher == null)
+            {
+                return;
+            }
+            var start = Stopwatch.GetTimestamp();
+            try
+            {
+                var message = new MqttApplicationMessageBuilder()
+                    .WithTopic(topic)
+                    .WithPayload(payload)
+                    .WithRetainFlag()
+                    .Build();
+                await managedMqttClientPublisher.PublishAsync(message, cancellationToken);
+                metrics.RecordMqttPublish(Stopwatch.GetElapsedTime(start).TotalMilliseconds);
+            }
+            catch (Exception)
+            {
+                metrics.RecordMqttPublishError();
+                throw;
+            }
+        }
+
         public void Dispose()
         {
             managedMqttClientPublisher?.DisconnectAsync(cancellationToken: cancellationTokenSource.Token).Wait(CancellationToken.None);
