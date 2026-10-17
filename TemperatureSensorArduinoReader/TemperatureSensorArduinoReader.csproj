@@ -37,4 +37,8 @@
     </None>
   </ItemGroup>
 
+  <PropertyGroup>
+    <SourceRevisionId Condition="'$(GITHUB_SHA)' != ''">$(GITHUB_SHA)</SourceRevisionId>
+  </PropertyGroup>
+
 </Project>

@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +17,8 @@ if (args.Length > 0 && args[0] == "climate")
     Environment.ExitCode = await new ClimateCli().Run(args[1..]);
     return;
 }
+
+var serviceVersion = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
 
 try
 {
@@ -43,7 +46,8 @@ try
                     o.Protocol = OtlpProtocol.Grpc;
                     o.ResourceAttributes = new Dictionary<string, object>
                     {
-                        ["service.name"] = "TemperatureSensorArduinoReader"
+                        ["service.name"] = "TemperatureSensorArduinoReader",
+                        ["service.version"] = serviceVersion
                     };
                 });
             }
@@ -63,7 +67,7 @@ try
     if (!string.IsNullOrWhiteSpace(appSettings?.OtlpEndpoint))
     {
         builder.Services.AddOpenTelemetry()
-            .ConfigureResource(r => r.AddService("TemperatureSensorArduinoReader"))
+            .ConfigureResource(r => r.AddService("TemperatureSensorArduinoReader", serviceVersion: serviceVersion))
             .WithMetrics(m => m
                 .AddMeter(SensorMetrics.MeterName)
                 .AddMeter("Npgsql")
