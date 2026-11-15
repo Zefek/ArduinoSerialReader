@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using GitHttpBackend.Configuration;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -27,6 +28,7 @@ try
     builder.Host.UseWindowsService();
 
     builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+    builder.AddConfigRepository(args);
 
     var appSettings = builder.Configuration.GetSection("TemperatureAppSettings").Get<TemperatureAppSettings>();
 
